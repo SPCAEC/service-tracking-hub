@@ -112,7 +112,34 @@
       t.addEventListener('change', () => setCardEnabled(card, t.checked));
     });
   }
+async function prefillPetsFromBackend() {
+  let clientRowId = '';
+  try { clientRowId = sessionStorage.getItem('clientRowId') || ''; } catch(e){}
+  if (!clientRowId) return;
 
+  clientsApi.getPets({ ClientRowId: clientRowId }, (res) => {
+    const list = (res && res.pets) ? res.pets : [];
+    // enable + fill sequentially
+    list.slice(0,6).forEach((p, i) => {
+      const card = grid.querySelector(`.pet-card[data-idx="${i}"]`);
+      if (!card) return;
+      // enable this card
+      const toggle = card.querySelector('.pet-enabled');
+      toggle.checked = true;
+      setCardEnabled(card, true);
+
+      // fill
+      card.querySelector('.pet-name').value    = p.Name || '';
+      card.querySelector('.pet-species').value = p.Species || 'Dog';
+      card.querySelector('.pet-breed').value   = p.Breed || '';
+      card.querySelector('.pet-sex').value     = p.Sex || 'Unknown';
+      card.querySelector('.pet-age').value     = (p.AgeYrs ?? '');
+      card.querySelector('.pet-weight').value  = (p.WeightLbs ?? '');
+      card.querySelector('.pet-fixed').checked = !!p.Fixed;
+      card.querySelector('.pet-notes').value   = p.Notes || '';
+    });
+  }, (err) => console.error('getPets failed', err));
+}
   function fillCard(card, p) {
     setCardEnabled(card, true);
     card.querySelector('.pet-id').value        = p.PetID || '';
@@ -176,7 +203,13 @@
   // Init
   buildGrid();
   loadExistingPets();  // prefills active pets
-
+// Run once when this screen is shown
+const showObserver = new MutationObserver(() => {
+  if (!scr.classList.contains('hidden')) {
+    prefillPetsFromBackend();
+  }
+});
+showObserver.observe(scr, { attributes: true, attributeFilter: ['class'] });
   // Back
   scr.querySelector('[data-nav="supplies-client"]')?.addEventListener('click', () => {
     // optional: save a local draft of pets so fields are preserved if user returns
