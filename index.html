@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Service Tracking Hub</title>
+  <?!= include('styles'); ?>
+</head>
+<body>
+  <main class="app" role="main">
+    <header class="header" aria-describedby="subtitle">
+      <h1>Service Tracking Hub</h1>
+      <p id="subtitle">Provided by the SPCA Serving Erie County</p>
+    </header>
+
+    <?!= include('home'); ?>
+    <?!= include('contact'); ?>
+    <?!= include('supplies-client'); ?>
+    <?!= include('supplies-pets'); ?>
+    <?!= include('supplies-entry'); ?>
+
+    <footer class="footer" aria-live="polite">
+      <small>SPCA Serving Erie County • Community Outreach</small>
+      <div class="status" id="status" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        <span style="margin-left:8px">Loading…</span>
+      </div>
+    </footer>
+  </main>
+
+  <div id="toast" class="msg hidden" role="status" aria-live="polite"></div>
+
+  <?!= include('app'); ?>
+</body>
+</html>
+
+<script>
+/** Frontend ↔︎ Apps Script shim (defensive) */
+(function () {
+  function parseMaybeJSON(x) {
+    if (!x) return x;
+    if (typeof x === 'string') {
+      try { return JSON.parse(x); } catch { return x; }
+    }
+    return x;
+  }
+
+  function call(runFn, payload, onSuccess, onFailure) {
+    if (!(window.google && google.script && google.script.run)) {
+      // local mock
+      setTimeout(() => onSuccess && onSuccess({ ok: true, mock: true, fn: runFn }), 200);
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        const out = parseMaybeJSON(res);
+        console.log(`[shim] ${runFn} →`, out);
+        onSuccess && onSuccess(out);
+      })
+      .withFailureHandler(function (err) {
+        console.error(`[shim] ${runFn} error`, err);
+        onFailure && onFailure(err);
+      })[runFn](payload);
+  }
+  window.clientsApi = Object.assign(window.clientsApi || {}, {
+  // already present: search, save, savePets, getFleaTickBrands, saveOrder
+  getPets: function (p, ok, fail) {
+    // p: { ClientRowId: "2" }
+    (function call(runFn, payload, onSuccess, onFailure){
+      if (!(window.google && google.script && google.script.run)) {
+        setTimeout(()=>onSuccess && onSuccess({ ok:true, pets:[] }), 150);
+        return;
+      }
+      google.script.run
+        .withSuccessHandler(res => onSuccess && onSuccess(res))
+        .withFailureHandler(err => onFailure && onFailure(err))
+        [runFn](payload);
+    })('apiGetPetsByClientRow', p, ok, fail);
+    }
+  });
+
+  // Create or extend the namespace safely
+  window.clientsApi = Object.assign(window.clientsApi || {}, {
+    /** Search client by ClientID / PhoneNormalized / EmailNormalized */
+    search: function (q, ok, fail) {
+      call('apiSearchClient', q, ok, fail);
+    },
+    /** Save (upsert) client; payload uses sheet header keys */
+    save: function (p, ok, fail) {
+      call('apiSaveClient', p, ok, fail);
+    },
+    /** Save pets for a client */
+    savePets: function (p, ok, fail) {
+      call('apiSavePets', p, ok, fail);
+    },
+    /** Get Flea/Tick brand options from Script Property FLEA_TICK_BRANDS */
+    getFleaTickBrands: function (_ignored, ok, fail) {
+      call('apiGetFleaTickBrands', {}, ok, fail);
+    },
+    /** Save a supplies order + line items */
+    saveOrder: function (p, ok, fail) {
+      call('apiSaveSuppliesOrder', p, ok, fail);
+    }
+  });
+})();
+</script>
