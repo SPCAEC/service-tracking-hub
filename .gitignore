@@ -1,4 +1,28 @@
-# macOS
+# macOS system files
+.DS_Store
+
+# Node modules & build junk
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Clasp local-only files
+.clasp.json.local
+.clasp-dev.json
+.clasp-prod.json
+
+# Service account keys or secrets (never commit these)
+*.key.json
+*.env
+.env*
+
+# Logs
+*.log
+
+# VS Code workspace junk
+.vscode/
+*.code-workspace# macOS
 .DS_Store
 node_modules/
 .clasp.json.local
