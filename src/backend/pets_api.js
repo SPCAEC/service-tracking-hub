@@ -221,3 +221,50 @@ function apiSavePets(body) {
   Logger.log('✅ Pets upsert for client %s → %s updates, %s inserts', clientRowId, updates, inserts);
   return safeReturn_({ ok:true, updates, inserts });
 }
+/**
+ * Read pets for a client (excluding Deceased/Rehomed).
+ * @param {{ClientRowId:string}} body
+ * @return {{ok:true, pets:Array}} pets sorted by PetID then PetIndex
+ */
+function apiGetPetsForClient(body) {
+  const clientRowId = String(body && body.ClientRowId || '').trim();
+  if (!clientRowId) return safeReturn_({ ok:false, pets:[], error:'ClientRowId required' });
+
+  const sh = getPetsSheet_();
+  const { headers, map } = petsEnsureColumns_(sh, Object.values(PETCOL));
+
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return safeReturn_({ ok:true, pets:[] });
+
+  const rows = sh.getRange(2, 1, lastRow - 1, headers.length).getValues();
+
+  const pets = rows
+    .map(r => {
+      const v = (col) => (map[col] != null ? r[map[col]] : '');
+      return {
+        PetID:     String(v('PetID') || ''),              // optional if you have it
+        PetIndex:  v(PETCOL.PetIndex) ?? '',
+        Name:      String(v(PETCOL.Name) || ''),
+        Species:   String(v(PETCOL.Species) || ''),
+        Breed:     String(v(PETCOL.Breed) || ''),
+        Sex:       String(v(PETCOL.Sex) || ''),
+        AgeYrs:    v(PETCOL.AgeYrs) === '' ? '' : Number(v(PETCOL.AgeYrs)),
+        WeightLbs: v(PETCOL.WeightLbs) === '' ? '' : Number(v(PETCOL.WeightLbs)),
+        Fixed:     v(PETCOL.Fixed) === true || String(v(PETCOL.Fixed)).toLowerCase() === 'true',
+        Notes:     String(v(PETCOL.Notes) || ''),
+        Deceased:  (String(v('Deceased')).toLowerCase() === 'true'),
+        Rehomed:   (String(v('Re-homed')).toLowerCase() === 'true'),
+        _rowId:    '', // not needed on FE
+        _client:   String(v(PETCOL.ClientRowId) || '')
+      };
+    })
+    .filter(p => p._client === clientRowId)
+    .filter(p => !p.Deceased && !p.Rehomed)
+    .sort((a,b) => {
+      // stable: PetID (if present) then PetIndex
+      if (a.PetID && b.PetID && a.PetID !== b.PetID) return a.PetID.localeCompare(b.PetID);
+      return (a.PetIndex||0) - (b.PetIndex||0);
+    });
+
+  return safeReturn_({ ok:true, pets });
+}
