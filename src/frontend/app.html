@@ -133,27 +133,6 @@
       pets: []
     };
   }
-  function collectPetsFromUI(){
-    const pets = [];
-    for(let i=1;i<=6;i++){
-      const card = document.querySelector(`.pet-card[data-index="${i}"]`);
-      const enabled = card.querySelector('.pet-enable').checked;
-      const pet = {
-        enabled,
-        petName: document.getElementById(`petName_${i}`).value.trim(),
-        species: document.getElementById(`species_${i}`).value,
-        breed: document.getElementById(`breed_${i}`).value.trim(),
-        color: document.getElementById(`color_${i}`).value.trim(),
-        ageYears: document.getElementById(`age_${i}`).value,
-        sex: document.getElementById(`sex_${i}`).value,
-        spayNeuterStatus: document.getElementById(`fix_${i}`).value,
-        weightLb: document.getElementById(`weight_${i}`).value,
-        notes: document.getElementById(`notes_${i}`).value.trim()
-      };
-      pets.push(pet);
-    }
-    return pets;
-  }
   function collectLineItemsFromUI() {
     const items = [];
     ITEM_DEFS.forEach(def => {
@@ -362,12 +341,15 @@
   // ---------- SUPPLIES HELPERS ----------
   function showSuppliesStatus(msg, isError=false){
     const el = document.getElementById('suppliesStatus');
+    if (!el) { console.warn('suppliesStatus element not found'); return; } // <-- guard
+
     el.textContent = msg;
     el.classList.toggle('hidden', false);
     el.style.background = isError ? 'var(--error-bg)' : '#ecfeff';
     el.style.borderColor = isError ? 'var(--error-border)' : 'var(--border)';
     el.style.color = isError ? 'var(--error)' : '#075985';
   }
+
   function clearSuppliesStatus(){ document.getElementById('suppliesStatus').classList.add('hidden'); }
 
   function initSuppliesPanel(){
@@ -393,6 +375,49 @@
     currentEntryId = res.entryId;
     return currentEntryId;
   }
+
+    // --- Modal helpers ---
+  function openAnotherClientModal(){
+    const m = document.getElementById('anotherClientModal');
+    if (!m) return;
+    m.classList.remove('hidden');
+    // basic focus: move to first button
+    setTimeout(()=> document.getElementById('anotherYesBtn')?.focus(), 0);
+  }
+  function closeAnotherClientModal(){
+    document.getElementById('anotherClientModal')?.classList.add('hidden');
+  }
+  // clicks on backdrop or [data-close] close the modal
+  document.addEventListener('click', (e)=>{
+    if (e.target.matches('#anotherClientModal [data-close], #anotherClientModal .modal-backdrop')) {
+      closeAnotherClientModal();
+    }
+  });
+  // Esc closes
+  document.addEventListener('keydown', (e)=>{
+    if (e.key === 'Escape') closeAnotherClientModal();
+  });
+
+  // What to do on Yes/No
+  document.addEventListener('click', (e)=>{
+    if (e.target && e.target.id === 'anotherYesBtn') {
+      // start fresh: clear any saved client/pets draft and go to client screen
+      try {
+        sessionStorage.removeItem('clientRowId');
+        sessionStorage.removeItem('clientClientID');
+        sessionStorage.removeItem('petsDraft');
+      } catch(e){}
+      // clear visible client form if present
+      const f = document.getElementById('clientForm');
+      if (f) f.reset();
+      closeAnotherClientModal();
+      navigate('supplies-client');
+    }
+    if (e.target && e.target.id === 'anotherNoBtn') {
+      closeAnotherClientModal();
+      navigate('home'); // back to Hub
+    }
+  });
 
   // ---------- HOME LAUNCHERS ----------
   const handlers = {
@@ -436,60 +461,7 @@
     finally{ setLoading(false); }
   });
 
-  // ---------- PETS ----------
-  const petsContinueBtn = document.getElementById('petsContinueBtn');
-  if (petsContinueBtn) petsContinueBtn.addEventListener('click', async () => {
-    try {
-      setLoading?.(true);
-
-      // 1) Collect enabled pets and map to Pets API shape
-      const raw = (typeof collectPetsFromUI === 'function') ? collectPetsFromUI() : [];
-      const pets = (raw || [])
-        .filter(p => p && (p.enabled === true || p.enabled === 'true' || p.enabled === 1))
-        .map(p => ({
-          Name:      p.Name ?? p.name ?? '',
-          Species:   p.Species ?? p.species ?? '',
-          Breed:     p.Breed ?? p.breed ?? '',
-          Sex:       p.Sex ?? p.sex ?? '',
-          AgeYrs:    (p.AgeYrs ?? p.ageYears ?? p.age ?? ''),
-          WeightLbs: (p.WeightLbs ?? p.weightLbs ?? p.weight ?? ''),
-          Fixed:     !!(p.Fixed ?? p.fixed),
-          Notes:     p.Notes ?? p.notes ?? ''
-        }));
-
-      // 2) Ensure we have a client row id (save client if needed)
-      let clientRowId = '';
-      try { clientRowId = sessionStorage.getItem('clientRowId') || ''; } catch(e) {}
-
-      if (!clientRowId) {
-        // Save client first
-        const clientPayload = (typeof collectClientPayload === 'function') ? collectClientPayload() : {};
-        const saved = await new Promise((resolve, reject) => {
-          clientsApi.save(clientPayload, resolve, reject);
-        });
-        clientRowId = String(saved?.rowId || saved?.RowId || '');
-        if (!clientRowId) { throw new Error('Missing rowId from client save'); }
-        try { sessionStorage.setItem('clientRowId', clientRowId); } catch(e) {}
-      }
-
-      // 3) Save pets for this client
-      const res = await new Promise((resolve, reject) => {
-        clientsApi.savePets({ ClientRowId: clientRowId, pets }, resolve, reject);
-      });
-      console.log('[pets] saved →', res);
-
-      // 4) Proceed to supplies entry
-      initSuppliesPanel?.();
-      navigate?.('supplies-entry');
-
-    } catch (err) {
-      console.error(err);
-      (typeof showToast === 'function' ? showToast('Could not save pets.') : alert('Could not save pets.'));
-    } finally {
-      setLoading?.(false);
-    }
-  });
-
+  // ---------- SUPPLIES ----------
   // ---------- SUPPLIES ----------
   const saveSuppliesBtn = document.getElementById('saveSuppliesBtn');
   if (saveSuppliesBtn) saveSuppliesBtn.addEventListener('click', async () => {
@@ -504,9 +476,15 @@
       if (truncated) msg += ` Only the first ${MAX_LINES} items were saved.`;
       showSuppliesStatus(msg, false);
       showToast('Supplies saved.');
-    } catch(err){ console.error(err); showSuppliesStatus(String(err), true); }
-    finally{ setLoading(false); }
+      // ⬇️ Show the modal
+      openAnotherClientModal();
+    } catch(err){ 
+      console.error(err); 
+      showSuppliesStatus(String(err), true); 
+    }
+    finally { setLoading(false); }
   });
+
   const cancelSuppliesBtn = document.getElementById('cancelSuppliesBtn');
   if (cancelSuppliesBtn) cancelSuppliesBtn.addEventListener('click', () => navigate('home'));
 
@@ -523,3 +501,30 @@
   });
 })();
 </script>
+
+<!-- Another Client Modal -->
+<div id="anotherClientModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="anotherClientTitle">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-content">
+    <h3 id="anotherClientTitle">Order saved</h3>
+    <p>Would you like to record supplies for another client?</p>
+    <div class="controls">
+      <button type="button" class="btn" id="anotherNoBtn">No, back to hub</button>
+      <button type="button" class="btn primary" id="anotherYesBtn">Yes, new client</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .modal.hidden { display: none; }
+  .modal {
+    position: fixed; inset: 0; display:flex; align-items:center; justify-content:center;
+    background: rgba(0,0,0,.5); z-index: 1000;
+  }
+  .modal-content {
+    background:#fff; padding:1.5rem; border-radius:12px; max-width:400px; width:90%;
+    box-shadow:0 2px 8px rgba(0,0,0,.2);
+    text-align:center;
+  }
+  .modal .controls { margin-top:1rem; display:flex; gap:.5rem; justify-content:center; }
+</style>
