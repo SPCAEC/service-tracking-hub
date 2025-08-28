@@ -341,12 +341,15 @@
   // ---------- SUPPLIES HELPERS ----------
   function showSuppliesStatus(msg, isError=false){
     const el = document.getElementById('suppliesStatus');
+    if (!el) { console.warn('suppliesStatus element not found'); return; } // <-- guard
+
     el.textContent = msg;
     el.classList.toggle('hidden', false);
     el.style.background = isError ? 'var(--error-bg)' : '#ecfeff';
     el.style.borderColor = isError ? 'var(--error-border)' : 'var(--border)';
     el.style.color = isError ? 'var(--error)' : '#075985';
   }
+  
   function clearSuppliesStatus(){ document.getElementById('suppliesStatus').classList.add('hidden'); }
 
   function initSuppliesPanel(){
