@@ -17,7 +17,7 @@
 
 <script>
 (() => {
-  const scr = document.getElementById('supplies-pets');
+  const scr  = document.getElementById('supplies-pets');
   if (!scr) return;
 
   const grid = scr.querySelector('#petGrid');
@@ -27,25 +27,26 @@
   const host = scr.closest('#app') || document;
   const showScreen = (id) => {
     host.querySelectorAll('.screen').forEach(el => el.classList.add('hidden'));
-    host.querySelector('#'+id)?.classList.remove('hidden');
+    host.querySelector('#' + id)?.classList.remove('hidden');
   };
-  const disableBtn = (b,s,on)=>{ if(!b)return; b.disabled=!!on; if(s)s.style.display=on?'inline-block':'none'; };
+  const disableBtn = (b, s, on) => { if (!b) return; b.disabled = !!on; if (s) s.style.display = on ? 'inline-block' : 'none'; };
 
   const speciesOpts = ['Dog','Cat','Other'];
-  const sexOpts = ['Male','Female','Unknown'];
-
-  const idFor = (name, idx) => `${name}_${idx}`;
+  const sexOpts     = ['Male','Female','Unknown'];
+  const idFor       = (name, idx) => `${name}_${idx}`;
 
   function petCardTemplate(idx) {
     return `
-      <input type="hidden" class="pet-id" id="${id('petid')}" />
       <div class="card pet-card" data-idx="${idx}">
+        <!-- Hidden PetID for upsert -->
         <input type="hidden" class="pet-id" id="${idFor('petid', idx)}" value="">
+
         <div class="card-header">
           <label class="toggle">
-            <input type="checkbox" class="pet-enabled" id="${idFor('enabled', idx)}"> Enable Pet ${idx+1}
+            <input type="checkbox" class="pet-enabled" id="${idFor('enabled', idx)}"> Enable Pet ${idx + 1}
           </label>
         </div>
+
         <div class="card-body grid cols-3 disabled-fields">
           <div class="field">
             <label for="${idFor('name', idx)}">Name</label>
@@ -98,134 +99,83 @@
 
   function setCardEnabled(card, on) {
     const body = card.querySelector('.card-body');
-    card.querySelector('.pet-enabled').checked = !!on;
+    const toggle = card.querySelector('.pet-enabled');
+    if (toggle) toggle.checked = !!on;
     card.classList.toggle('active', !!on);
     body.classList.toggle('disabled-fields', !on);
     body.querySelectorAll('input,select,textarea').forEach(el => el.disabled = !on);
   }
 
   function fillCard(card, p) {
-    setCardEnabled(card, true); // enables inputs in this card
+    setCardEnabled(card, true);
+    const q = (sel) => card.querySelector(sel);
 
-    // Hidden PetID used for upserts on save
-    const hid = card.querySelector('.pet-id');
-    if (hid) hid.value = p.PetID || '';
-
-    // Visible fields
-    const bySel = (sel) => card.querySelector(sel);
-    const safe  = (v, d='') => (v == null ? d : v);
-
-    const fixedEl = bySel('.pet-fixed');
-    if (fixedEl) fixedEl.checked = !!p.Fixed;
-
-    const map = [
-      ['.pet-name',    safe(p.Name)],
-      ['.pet-species', safe(p.Species || 'Dog')],
-      ['.pet-breed',   safe(p.Breed)],
-      ['.pet-sex',     safe(p.Sex || 'Unknown')],
-      ['.pet-age',     safe(p.AgeYrs, '')],
-      ['.pet-weight',  safe(p.WeightLbs, '')],
-      ['.pet-notes',   safe(p.Notes)]
-    ];
-    map.forEach(([sel, val]) => { const el = bySel(sel); if (el) el.value = val; });
+    q('.pet-id').value               = p.PetID || '';
+    q('.pet-name').value             = p.Name || '';
+    q('.pet-species').value          = p.Species || 'Dog';
+    q('.pet-breed').value            = p.Breed || '';
+    q('.pet-sex').value              = p.Sex || 'Unknown';
+    q('.pet-age').value              = (p.AgeYrs ?? '');
+    q('.pet-weight').value           = (p.WeightLbs ?? '');
+    q('.pet-fixed').checked          = !!p.Fixed;
+    q('.pet-deceased').checked       = !!p.Deceased;
+    q('.pet-rehomed').checked        = !!p.Rehomed;
+    q('.pet-notes').value            = p.Notes || '';
   }
 
   function buildGrid() {
     grid.innerHTML = '';
-    for (let i=0;i<6;i++) grid.insertAdjacentHTML('beforeend', petCardTemplate(i));
+    for (let i = 0; i < 6; i++) grid.insertAdjacentHTML('beforeend', petCardTemplate(i));
     grid.querySelectorAll('.pet-card').forEach(card => {
       const t = card.querySelector('.pet-enabled');
       setCardEnabled(card, false);
-      t.addEventListener('change', () => setCardEnabled(card, t.checked));
+      t?.addEventListener('change', () => setCardEnabled(card, t.checked));
     });
-  }
-async function prefillPetsFromBackend() {
-  let clientRowId = '';
-  try { clientRowId = sessionStorage.getItem('clientRowId') || ''; } catch(e){}
-  if (!clientRowId) return;
-
-  clientsApi.getPets({ ClientRowId: clientRowId }, (res) => {
-    const list = (res && res.pets) ? res.pets : [];
-    // enable + fill sequentially
-    list.slice(0,6).forEach((p, i) => {
-      const card = grid.querySelector(`.pet-card[data-idx="${i}"]`);
-      if (!card) return;
-      // enable this card
-      const toggle = card.querySelector('.pet-enabled');
-      toggle.checked = true;
-      setCardEnabled(card, true);
-
-      // fill
-      card.querySelector('.pet-name').value    = p.Name || '';
-      card.querySelector('.pet-species').value = p.Species || 'Dog';
-      card.querySelector('.pet-breed').value   = p.Breed || '';
-      card.querySelector('.pet-sex').value     = p.Sex || 'Unknown';
-      card.querySelector('.pet-age').value     = (p.AgeYrs ?? '');
-      card.querySelector('.pet-weight').value  = (p.WeightLbs ?? '');
-      card.querySelector('.pet-fixed').checked = !!p.Fixed;
-      card.querySelector('.pet-notes').value   = p.Notes || '';
-    });
-  }, (err) => console.error('getPets failed', err));
-}
-  function fillCard(card, p) {
-    setCardEnabled(card, true);
-    card.querySelector('.pet-id').value        = p.PetID || '';
-    card.querySelector('.pet-name').value      = p.Name || '';
-    card.querySelector('.pet-species').value   = p.Species || 'Dog';
-    card.querySelector('.pet-breed').value     = p.Breed || '';
-    card.querySelector('.pet-sex').value       = p.Sex || 'Unknown';
-    card.querySelector('.pet-age').value       = p.AgeYrs ?? '';
-    card.querySelector('.pet-weight').value    = p.WeightLbs ?? '';
-    card.querySelector('.pet-fixed').checked   = !!p.Fixed;
-    card.querySelector('.pet-deceased').checked= !!p.Deceased;
-    card.querySelector('.pet-rehomed').checked = !!p.Rehomed;
-    card.querySelector('.pet-notes').value     = p.Notes || '';
   }
 
   function serializePets() {
-    const pets = [];
+    const out = [];
     grid.querySelectorAll('.pet-card').forEach(card => {
       const enabledEl = card.querySelector('.pet-enabled');
-      const on = !!enabledEl && !!enabledEl.checked;
-      if (!on) return;
+      if (!enabledEl?.checked) return;
 
       const pet = {
-        // NEW: include PetID so backend updates instead of inserting
-        PetID:   card.querySelector('.pet-id')?.value?.trim() || '',
-        Name:    card.querySelector('.pet-name')?.value?.trim() || '',
-        Species: card.querySelector('.pet-species')?.value || '',
-        Breed:   card.querySelector('.pet-breed')?.value?.trim() || '',
-        Sex:     card.querySelector('.pet-sex')?.value || '',
-        AgeYrs:  Number(card.querySelector('.pet-age')?.value || '') || '',
+        PetID:     card.querySelector('.pet-id')?.value?.trim() || '',
+        Name:      card.querySelector('.pet-name')?.value?.trim() || '',
+        Species:   card.querySelector('.pet-species')?.value || '',
+        Breed:     card.querySelector('.pet-breed')?.value?.trim() || '',
+        Sex:       card.querySelector('.pet-sex')?.value || '',
+        AgeYrs:    Number(card.querySelector('.pet-age')?.value || '') || '',
         WeightLbs: Number(card.querySelector('.pet-weight')?.value || '') || '',
-        Fixed:   !!card.querySelector('.pet-fixed')?.checked,
-        Notes:   card.querySelector('.pet-notes')?.value?.trim() || ''
+        Fixed:     !!card.querySelector('.pet-fixed')?.checked,
+        Deceased:  !!card.querySelector('.pet-deceased')?.checked,
+        Rehomed:   !!card.querySelector('.pet-rehomed')?.checked,
+        Notes:     card.querySelector('.pet-notes')?.value?.trim() || ''
       };
 
-      // If literally nothing is filled, skip it
+      // Skip truly empty new cards
       if (!pet.PetID && !pet.Name && !pet.Species && !pet.Breed && !pet.Sex &&
-          pet.AgeYrs==='' && pet.WeightLbs==='' && !pet.Fixed && !pet.Notes) return;
+          pet.AgeYrs === '' && pet.WeightLbs === '' && !pet.Fixed && !pet.Deceased &&
+          !pet.Rehomed && !pet.Notes) return;
 
-      pets.push(pet);
+      out.push(pet);
     });
-    return pets;
+    return out;
   }
 
   async function loadExistingPets() {
-    // requires clientRowId in session
     let clientRowId = '';
     try { clientRowId = sessionStorage.getItem('clientRowId') || ''; } catch(e){}
     if (!clientRowId || !window.clientsApi?.getPets) return;
 
     try {
-      const res = await new Promise((resolve, reject) => {
+      const res  = await new Promise((resolve, reject) => {
         clientsApi.getPets({ ClientRowId: clientRowId }, resolve, reject);
       });
+      const list = Array.isArray(res?.pets) ? res.pets : [];
 
-      const arr = (res && res.pets) ? res.pets : [];
-
-      // Fill up to 6 cards, in the order returned (already filtered by backend)
-      arr.slice(0, 6).forEach((p, i) => {
+      // Fill up to 6 cards in given order (backend already filters out Deceased/Rehomed)
+      list.slice(0, 6).forEach((p, i) => {
         const card = grid.querySelector(`.pet-card[data-idx="${i}"]`);
         if (card) fillCard(card, p);
       });
@@ -236,24 +186,18 @@ async function prefillPetsFromBackend() {
 
   // Init
   buildGrid();
-  loadPetsFromSession();
-  loadExistingPets();  // prefills active pets
-// Run once when this screen is shown
-const showObserver = new MutationObserver(() => {
-  if (!scr.classList.contains('hidden')) {
-    prefillPetsFromBackend();
-  }
-});
-showObserver.observe(scr, { attributes: true, attributeFilter: ['class'] });
-  // Back
-  scr.querySelector('[data-nav="supplies-client"]')?.addEventListener('click', () => {
-    // optional: save a local draft of pets so fields are preserved if user returns
-    try {
-      const draft = serializePets(); // from the same file
-      sessionStorage.setItem('petsDraft', JSON.stringify(draft));
-    } catch (e) {}
+  loadExistingPets();
 
-    // IMPORTANT: just navigate; do NOT call any save here
+  // If the screen becomes visible later, refresh once
+  const showObserver = new MutationObserver(() => {
+    if (!scr.classList.contains('hidden')) {
+      loadExistingPets();
+    }
+  });
+  showObserver.observe(scr, { attributes: true, attributeFilter: ['class'] });
+
+  // Back → just navigate (no save)
+  scr.querySelector('[data-nav="supplies-client"]')?.addEventListener('click', () => {
     host.querySelectorAll('.screen').forEach(el => el.classList.add('hidden'));
     host.querySelector('#supplies-client')?.classList.remove('hidden');
   });
@@ -267,7 +211,7 @@ showObserver.observe(scr, { attributes: true, attributeFilter: ['class'] });
     const pets = serializePets();
     disableBtn(btn, spin, true);
 
-    const ok = () => { disableBtn(btn, spin, false); showScreen('supplies-entry'); };
+    const ok   = () => { disableBtn(btn, spin, false); showScreen('supplies-entry'); };
     const fail = (err) => { console.error(err); disableBtn(btn, spin, false); alert('Saving pets failed.'); };
 
     if (window.clientsApi?.savePets) {
