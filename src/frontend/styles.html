@@ -86,4 +86,30 @@
     .grid.cols-3{ grid-template-columns: 1fr 1fr; }
     .item-row{ grid-template-columns: 1fr 100px 1fr; }
   }
+
+  /* Modal */
+  .modal.hidden { display: none; }
+  .modal {
+    position: fixed; inset: 0; z-index: 1000;
+    display: grid; place-items: center;
+  }
+  .modal-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,.45);
+  }
+  .modal-card {
+    position: relative;
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.2);
+    width: min(520px, 92vw);
+  }
+  .modal-actions {
+    margin-top: 16px; display: flex; gap: 8px; justify-content: flex-end;
+  }
+  .modal-close {
+    position: absolute; top: 8px; right: 12px; border: none; background: transparent;
+    font-size: 22px; line-height: 1; cursor: pointer;
+  }
 </style>

@@ -373,6 +373,49 @@
     return currentEntryId;
   }
 
+    // --- Modal helpers ---
+  function openAnotherClientModal(){
+    const m = document.getElementById('anotherClientModal');
+    if (!m) return;
+    m.classList.remove('hidden');
+    // basic focus: move to first button
+    setTimeout(()=> document.getElementById('anotherYesBtn')?.focus(), 0);
+  }
+  function closeAnotherClientModal(){
+    document.getElementById('anotherClientModal')?.classList.add('hidden');
+  }
+  // clicks on backdrop or [data-close] close the modal
+  document.addEventListener('click', (e)=>{
+    if (e.target.matches('#anotherClientModal [data-close], #anotherClientModal .modal-backdrop')) {
+      closeAnotherClientModal();
+    }
+  });
+  // Esc closes
+  document.addEventListener('keydown', (e)=>{
+    if (e.key === 'Escape') closeAnotherClientModal();
+  });
+
+  // What to do on Yes/No
+  document.addEventListener('click', (e)=>{
+    if (e.target && e.target.id === 'anotherYesBtn') {
+      // start fresh: clear any saved client/pets draft and go to client screen
+      try {
+        sessionStorage.removeItem('clientRowId');
+        sessionStorage.removeItem('clientClientID');
+        sessionStorage.removeItem('petsDraft');
+      } catch(e){}
+      // clear visible client form if present
+      const f = document.getElementById('clientForm');
+      if (f) f.reset();
+      closeAnotherClientModal();
+      navigate('supplies-client');
+    }
+    if (e.target && e.target.id === 'anotherNoBtn') {
+      closeAnotherClientModal();
+      navigate('home'); // back to Hub
+    }
+  });
+
   // ---------- HOME LAUNCHERS ----------
   const handlers = {
     'record-medical': () => showToast('Launching: Record Medical (coming next)…'),
@@ -429,6 +472,8 @@
       if (truncated) msg += ` Only the first ${MAX_LINES} items were saved.`;
       showSuppliesStatus(msg, false);
       showToast('Supplies saved.');
+      // NEW: prompt to record another client
+      openAnotherClientModal();
     } catch(err){ console.error(err); showSuppliesStatus(String(err), true); }
     finally{ setLoading(false); }
   });

@@ -30,6 +30,20 @@
 
   <div id="toast" class="msg hidden" role="status" aria-live="polite"></div>
 
+  <!-- Confirm Another Client Modal -->
+  <div id="anotherClientModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="anotherClientTitle" aria-describedby="anotherClientDesc">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card" role="document">
+      <h3 id="anotherClientTitle">Record supplies for another client?</h3>
+      <p id="anotherClientDesc">You can start a new entry or return to the hub.</p>
+      <div class="modal-actions">
+        <button type="button" class="btn primary" id="anotherYesBtn">Yes, new client</button>
+        <button type="button" class="btn secondary" id="anotherNoBtn">No, back to hub</button>
+      </div>
+      <button type="button" class="modal-close" title="Close" aria-label="Close" data-close>&times;</button>
+    </div>
+  </div>
+
   <?!= include('app'); ?>
 </body>
 </html>
