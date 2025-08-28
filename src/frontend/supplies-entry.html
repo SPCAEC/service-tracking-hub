@@ -108,6 +108,17 @@
     <!-- status / feedback message -->
     <div id="suppliesStatus" class="msg msg-inline hidden" aria-live="polite"></div>
   </div>
+  <!-- Save confirmation modal -->
+  <div id="suppliesDoneModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="suppliesDoneTitle">
+    <div class="modal-content">
+      <h3 id="suppliesDoneTitle">Order saved</h3>
+      <p>Would you like to record supplies for another client?</p>
+      <div class="controls">
+        <button type="button" class="btn" id="modalBackHome">No, back to hub</button>
+        <button type="button" class="btn primary" id="modalAnother">Yes, new client</button>
+      </div>
+    </div>
+  </div>
 </section>
 
 <script>

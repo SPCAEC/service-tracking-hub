@@ -349,7 +349,7 @@
     el.style.borderColor = isError ? 'var(--error-border)' : 'var(--border)';
     el.style.color = isError ? 'var(--error)' : '#075985';
   }
-  
+
   function clearSuppliesStatus(){ document.getElementById('suppliesStatus').classList.add('hidden'); }
 
   function initSuppliesPanel(){
@@ -462,6 +462,7 @@
   });
 
   // ---------- SUPPLIES ----------
+  // ---------- SUPPLIES ----------
   const saveSuppliesBtn = document.getElementById('saveSuppliesBtn');
   if (saveSuppliesBtn) saveSuppliesBtn.addEventListener('click', async () => {
     if (!currentClientId) { showSuppliesStatus('No client saved yet.', true); return; }
@@ -475,11 +476,15 @@
       if (truncated) msg += ` Only the first ${MAX_LINES} items were saved.`;
       showSuppliesStatus(msg, false);
       showToast('Supplies saved.');
-      // NEW: prompt to record another client
+      // ⬇️ Show the modal
       openAnotherClientModal();
-    } catch(err){ console.error(err); showSuppliesStatus(String(err), true); }
-    finally{ setLoading(false); }
+    } catch(err){ 
+      console.error(err); 
+      showSuppliesStatus(String(err), true); 
+    }
+    finally { setLoading(false); }
   });
+
   const cancelSuppliesBtn = document.getElementById('cancelSuppliesBtn');
   if (cancelSuppliesBtn) cancelSuppliesBtn.addEventListener('click', () => navigate('home'));
 
@@ -496,3 +501,30 @@
   });
 })();
 </script>
+
+<!-- Another Client Modal -->
+<div id="anotherClientModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="anotherClientTitle">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-content">
+    <h3 id="anotherClientTitle">Order saved</h3>
+    <p>Would you like to record supplies for another client?</p>
+    <div class="controls">
+      <button type="button" class="btn" id="anotherNoBtn">No, back to hub</button>
+      <button type="button" class="btn primary" id="anotherYesBtn">Yes, new client</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .modal.hidden { display: none; }
+  .modal {
+    position: fixed; inset: 0; display:flex; align-items:center; justify-content:center;
+    background: rgba(0,0,0,.5); z-index: 1000;
+  }
+  .modal-content {
+    background:#fff; padding:1.5rem; border-radius:12px; max-width:400px; width:90%;
+    box-shadow:0 2px 8px rgba(0,0,0,.2);
+    text-align:center;
+  }
+  .modal .controls { margin-top:1rem; display:flex; gap:.5rem; justify-content:center; }
+</style>
