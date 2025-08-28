@@ -133,27 +133,6 @@
       pets: []
     };
   }
-  function collectPetsFromUI(){
-    const pets = [];
-    for(let i=1;i<=6;i++){
-      const card = document.querySelector(`.pet-card[data-index="${i}"]`);
-      const enabled = card.querySelector('.pet-enable').checked;
-      const pet = {
-        enabled,
-        petName: document.getElementById(`petName_${i}`).value.trim(),
-        species: document.getElementById(`species_${i}`).value,
-        breed: document.getElementById(`breed_${i}`).value.trim(),
-        color: document.getElementById(`color_${i}`).value.trim(),
-        ageYears: document.getElementById(`age_${i}`).value,
-        sex: document.getElementById(`sex_${i}`).value,
-        spayNeuterStatus: document.getElementById(`fix_${i}`).value,
-        weightLb: document.getElementById(`weight_${i}`).value,
-        notes: document.getElementById(`notes_${i}`).value.trim()
-      };
-      pets.push(pet);
-    }
-    return pets;
-  }
   function collectLineItemsFromUI() {
     const items = [];
     ITEM_DEFS.forEach(def => {
@@ -434,60 +413,6 @@
     try { setLoading(true); await saveClientOnly_(); showToast('Client saved.'); }
     catch(err){ console.error(err); showToast('Could not save client.'); }
     finally{ setLoading(false); }
-  });
-
-  // ---------- PETS ----------
-  const petsContinueBtn = document.getElementById('petsContinueBtn');
-  if (petsContinueBtn) petsContinueBtn.addEventListener('click', async () => {
-    try {
-      setLoading?.(true);
-
-      // 1) Collect enabled pets and map to Pets API shape
-      const raw = (typeof collectPetsFromUI === 'function') ? collectPetsFromUI() : [];
-      const pets = (raw || [])
-        .filter(p => p && (p.enabled === true || p.enabled === 'true' || p.enabled === 1))
-        .map(p => ({
-          Name:      p.Name ?? p.name ?? '',
-          Species:   p.Species ?? p.species ?? '',
-          Breed:     p.Breed ?? p.breed ?? '',
-          Sex:       p.Sex ?? p.sex ?? '',
-          AgeYrs:    (p.AgeYrs ?? p.ageYears ?? p.age ?? ''),
-          WeightLbs: (p.WeightLbs ?? p.weightLbs ?? p.weight ?? ''),
-          Fixed:     !!(p.Fixed ?? p.fixed),
-          Notes:     p.Notes ?? p.notes ?? ''
-        }));
-
-      // 2) Ensure we have a client row id (save client if needed)
-      let clientRowId = '';
-      try { clientRowId = sessionStorage.getItem('clientRowId') || ''; } catch(e) {}
-
-      if (!clientRowId) {
-        // Save client first
-        const clientPayload = (typeof collectClientPayload === 'function') ? collectClientPayload() : {};
-        const saved = await new Promise((resolve, reject) => {
-          clientsApi.save(clientPayload, resolve, reject);
-        });
-        clientRowId = String(saved?.rowId || saved?.RowId || '');
-        if (!clientRowId) { throw new Error('Missing rowId from client save'); }
-        try { sessionStorage.setItem('clientRowId', clientRowId); } catch(e) {}
-      }
-
-      // 3) Save pets for this client
-      const res = await new Promise((resolve, reject) => {
-        clientsApi.savePets({ ClientRowId: clientRowId, pets }, resolve, reject);
-      });
-      console.log('[pets] saved →', res);
-
-      // 4) Proceed to supplies entry
-      initSuppliesPanel?.();
-      navigate?.('supplies-entry');
-
-    } catch (err) {
-      console.error(err);
-      (typeof showToast === 'function' ? showToast('Could not save pets.') : alert('Could not save pets.'));
-    } finally {
-      setLoading?.(false);
-    }
   });
 
   // ---------- SUPPLIES ----------
