@@ -38,6 +38,7 @@
 
   function petCardTemplate(idx) {
     return `
+      <input type="hidden" class="pet-id" id="${id('petid')}" />
       <div class="card pet-card" data-idx="${idx}">
         <input type="hidden" class="pet-id" id="${idFor('petid', idx)}" value="">
         <div class="card-header">
@@ -103,6 +104,32 @@
     body.querySelectorAll('input,select,textarea').forEach(el => el.disabled = !on);
   }
 
+  function fillCard(card, p) {
+    setCardEnabled(card, true); // enables inputs in this card
+
+    // Hidden PetID used for upserts on save
+    const hid = card.querySelector('.pet-id');
+    if (hid) hid.value = p.PetID || '';
+
+    // Visible fields
+    const bySel = (sel) => card.querySelector(sel);
+    const safe  = (v, d='') => (v == null ? d : v);
+
+    const fixedEl = bySel('.pet-fixed');
+    if (fixedEl) fixedEl.checked = !!p.Fixed;
+
+    const map = [
+      ['.pet-name',    safe(p.Name)],
+      ['.pet-species', safe(p.Species || 'Dog')],
+      ['.pet-breed',   safe(p.Breed)],
+      ['.pet-sex',     safe(p.Sex || 'Unknown')],
+      ['.pet-age',     safe(p.AgeYrs, '')],
+      ['.pet-weight',  safe(p.WeightLbs, '')],
+      ['.pet-notes',   safe(p.Notes)]
+    ];
+    map.forEach(([sel, val]) => { const el = bySel(sel); if (el) el.value = val; });
+  }
+
   function buildGrid() {
     grid.innerHTML = '';
     for (let i=0;i<6;i++) grid.insertAdjacentHTML('beforeend', petCardTemplate(i));
@@ -158,25 +185,28 @@ async function prefillPetsFromBackend() {
   function serializePets() {
     const pets = [];
     grid.querySelectorAll('.pet-card').forEach(card => {
-      if (!card.querySelector('.pet-enabled').checked) return;
-      const p = {
-        PetID:     card.querySelector('.pet-id').value || '',
-        Name:      card.querySelector('.pet-name').value.trim(),
-        Species:   card.querySelector('.pet-species').value,
-        Breed:     card.querySelector('.pet-breed').value.trim(),
-        Sex:       card.querySelector('.pet-sex').value,
-        AgeYrs:    Number(card.querySelector('.pet-age').value || '') || '',
-        WeightLbs: Number(card.querySelector('.pet-weight').value || '') || '',
-        Fixed:     !!card.querySelector('.pet-fixed').checked,
-        Notes:     card.querySelector('.pet-notes').value.trim(),
-        Deceased:  !!card.querySelector('.pet-deceased').checked,
-        Rehomed:   !!card.querySelector('.pet-rehomed').checked
+      const enabledEl = card.querySelector('.pet-enabled');
+      const on = !!enabledEl && !!enabledEl.checked;
+      if (!on) return;
+
+      const pet = {
+        // NEW: include PetID so backend updates instead of inserting
+        PetID:   card.querySelector('.pet-id')?.value?.trim() || '',
+        Name:    card.querySelector('.pet-name')?.value?.trim() || '',
+        Species: card.querySelector('.pet-species')?.value || '',
+        Breed:   card.querySelector('.pet-breed')?.value?.trim() || '',
+        Sex:     card.querySelector('.pet-sex')?.value || '',
+        AgeYrs:  Number(card.querySelector('.pet-age')?.value || '') || '',
+        WeightLbs: Number(card.querySelector('.pet-weight')?.value || '') || '',
+        Fixed:   !!card.querySelector('.pet-fixed')?.checked,
+        Notes:   card.querySelector('.pet-notes')?.value?.trim() || ''
       };
-      // allow empty if marked deceased/rehomed (so user can just flag it)
-      const allEmpty = !p.Name && !p.Species && !p.Breed && !p.Sex &&
-                       p.AgeYrs === '' && p.WeightLbs === '' && !p.Fixed && !p.Notes;
-      if (allEmpty && !p.Deceased && !p.Rehomed) return;
-      pets.push(p);
+
+      // If literally nothing is filled, skip it
+      if (!pet.PetID && !pet.Name && !pet.Species && !pet.Breed && !pet.Sex &&
+          pet.AgeYrs==='' && pet.WeightLbs==='' && !pet.Fixed && !pet.Notes) return;
+
+      pets.push(pet);
     });
     return pets;
   }
@@ -187,21 +217,26 @@ async function prefillPetsFromBackend() {
     try { clientRowId = sessionStorage.getItem('clientRowId') || ''; } catch(e){}
     if (!clientRowId || !window.clientsApi?.getPets) return;
 
-    await new Promise((resolve, reject) => {
-      clientsApi.getPets({ ClientRowId: clientRowId }, (res) => {
-        const arr = (res && res.pets) ? res.pets : [];
-        // fill up to 6 cards in PetID order
-        arr.slice(0,6).forEach((p, i) => {
-          const card = grid.querySelector(`.pet-card[data-idx="${i}"]`);
-          if (card) fillCard(card, p);
-        });
-        resolve();
-      }, reject);
-    });
+    try {
+      const res = await new Promise((resolve, reject) => {
+        clientsApi.getPets({ ClientRowId: clientRowId }, resolve, reject);
+      });
+
+      const arr = (res && res.pets) ? res.pets : [];
+
+      // Fill up to 6 cards, in the order returned (already filtered by backend)
+      arr.slice(0, 6).forEach((p, i) => {
+        const card = grid.querySelector(`.pet-card[data-idx="${i}"]`);
+        if (card) fillCard(card, p);
+      });
+    } catch (err) {
+      console.error('loadExistingPets failed', err);
+    }
   }
 
   // Init
   buildGrid();
+  loadPetsFromSession();
   loadExistingPets();  // prefills active pets
 // Run once when this screen is shown
 const showObserver = new MutationObserver(() => {
