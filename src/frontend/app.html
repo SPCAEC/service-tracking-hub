@@ -363,6 +363,9 @@
   }
 
   async function ensureDraft_(){
+    if (!currentClientId) {
+      try { currentClientId = sessionStorage.getItem('clientClientID') || null; } catch(e){}
+    }
     if (currentEntryId) return currentEntryId;
     const meta = {
       clientId: currentClientId,
@@ -439,7 +442,9 @@
   async function saveClientOnly_(){
     const payload = collectClientPayload(); // pets empty here
     const res = await upsertClient_(payload);
-    currentClientId = res.clientId;
+    currentClientId = res.ClientID || res.clientId || null; // accept either shape
+    // (optional but helpful)
+    try { sessionStorage.setItem('clientClientID', currentClientId || ''); } catch(e){}
     return res;
   }
   const petYes = document.getElementById('btnPetYes');
