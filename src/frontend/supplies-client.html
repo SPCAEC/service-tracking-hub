@@ -85,7 +85,7 @@
 
       <!-- CONSENT -->
       <fieldset class="fieldset">
-        <legend>Opt‑In Consent</legend>
+        <legend>Opt-In Consent</legend>
         <div class="hint">
           Client consent to be contacted by the <strong>Pet Pantry</strong> about their pantry order and additional services.
         </div>
@@ -136,12 +136,12 @@
   const email = scr.querySelector('#email');
   const zip   = scr.querySelector('#zip');
   const state = scr.querySelector('#state');
-  const rowId = scr.querySelector('#rowId'); // hidden; stores RowId when we load an existing client
+  const rowId = scr.querySelector('#rowId');
 
   const btnPetYes = scr.querySelector('#btnPetYes');
   const btnPetNo  = scr.querySelector('#btnPetNo');
-  let nextScreenAfterSave = null; // 'supplies-pets' or 'supplies-items'
-  let savingNow = false;          // guard against double-save
+  let nextScreenAfterSave = null;
+  let savingNow = false;
 
   // ---------- helpers
   const setMsg = (text, type='') => { msg.className = `msg ${type}`.trim(); msg.textContent = text || ''; };
@@ -164,19 +164,30 @@
   };
   const truthy = (v) => (v === true || v === 'TRUE' || v === 'true' || v === 'Yes' || v === 'yes' || v === 1 || v === '1');
 
+  // ---- DIRTY TRACKING ----
+  let formDirty = false;
+  form.querySelectorAll('input,select,textarea').forEach(el => {
+    el.addEventListener('change', () => { formDirty = true; });
+    el.addEventListener('input',  () => { formDirty = true; });
+  });
+  function stashClientIds(c) {
+    try {
+      if (c?.RowId || rowId.value) sessionStorage.setItem('clientRowId', String(c?.RowId || rowId.value));
+      if (c?.ClientID || clientId.value) sessionStorage.setItem('clientClientID', String(c?.ClientID || clientId.value));
+    } catch(e){}
+  }
+
   // Serialize form -> object keyed to sheet headers
   const serialize = () => {
     const data = Object.fromEntries(new FormData(form).entries());
-
     const consentEmail = !!form.querySelector('#consentEmail')?.checked;
     const consentSMS   = !!form.querySelector('#consentSMS')?.checked;
-
     const phoneNorm = (phone.value || '').replace(/\D/g,'');
     const emailNorm = (email.value || '').trim().toLowerCase();
 
-    const payload = {
-      RowId:            data.rowId || '',                  // update if present
-      ClientID:         (clientId.value || '').trim(),     // may be blank; backend will auto-generate on insert
+    return {
+      RowId:            data.rowId || '',
+      ClientID:         (clientId.value || '').trim(),
       FirstName:        scr.querySelector('#firstName').value || '',
       LastName:         scr.querySelector('#lastName').value || '',
       Address1:         scr.querySelector('#addr1').value || '',
@@ -192,19 +203,16 @@
       ConsentEmail:     consentEmail,
       ConsentSMS:       consentSMS
     };
-    return payload;
   };
 
   // Fill form from object that uses sheet headers
-  const fillForm = (c = {}) => {
+  const fillFormOnly = (c = {}) => {
     rowId.value = c.RowId || '';
     clientId.value = c.ClientID || '';
     const phoneDisplay = c.PhoneNormalized ? toUSPhone(c.PhoneNormalized) : (c.Phone || '');
     const emailDisplay = c.Email || c.EmailNormalized || '';
-
     phone.value = phoneDisplay || '';
     email.value = emailDisplay || '';
-
     scr.querySelector('#firstName').value = c.FirstName || '';
     scr.querySelector('#lastName').value  = c.LastName  || '';
     scr.querySelector('#addr1').value     = c.Address1  || '';
@@ -212,15 +220,11 @@
     scr.querySelector('#city').value      = c.City      || '';
     state.value                           = (c.State || '').toUpperCase();
     zip.value                             = c.ZIP || '';
-
     scr.querySelector('#consentEmail').checked = truthy(c.ConsentEmail);
     scr.querySelector('#consentSMS').checked   = truthy(c.ConsentSMS);
   };
-
-  // ---------- input niceties
-  phone?.addEventListener('input', () => phone.value = toUSPhone(phone.value));
-  zip?.addEventListener('input', () => zip.value = toUSZip(zip.value));
-  state?.addEventListener('input', () => state.value = state.value.toUpperCase());
+  // wrapper to reset dirty after programmatic fill
+  const fillFormAndResetDirty = (c) => { fillFormOnly(c); formDirty = false; };
 
   // ---------- validation (minimal: require first/last on save)
   const validate = () => {
@@ -251,27 +255,13 @@
 
     const onSuccess = (res) => {
       disableBtn(searchBtn, searchSpinner, false);
-
       if (res && res.found && res.client) {
-        fillForm(res.client);
-        rowId.value = res.client.RowId || '';
-
-        // NEW: remember the matched client so downstream screens never auto-insert
-        try {
-          sessionStorage.setItem('clientRowId', String(res.client.RowId || ''));
-          sessionStorage.setItem('clientClientID', String(res.client.ClientID || ''));
-        } catch (e) {}
-
+        fillFormAndResetDirty(res.client);     // IMPORTANT: clear dirty
+        stashClientIds(res.client);            // remember for pets screen
         setMsg('Client found. You can edit any fields before saving.', 'success');
       } else {
         rowId.value = '';
-
-        // NEW: clear any stale stored id so pets screen won’t try to use it
-        try {
-          sessionStorage.removeItem('clientRowId');
-          sessionStorage.removeItem('clientClientID');
-        } catch (e) {}
-
+        try { sessionStorage.removeItem('clientRowId'); sessionStorage.removeItem('clientClientID'); } catch(e){}
         setMsg('No client found. Please enter details below, then save.', '');
       }
     };
@@ -284,9 +274,28 @@
     clientsApi.search(q, onSuccess, onFailure);
   });
 
-  // ---------- pet path choice (save + route)
-  btnPetYes?.addEventListener('click', () => { nextScreenAfterSave = btnPetYes.dataset.next; form.requestSubmit(); });
-  btnPetNo?.addEventListener('click',  () => { nextScreenAfterSave = btnPetNo.dataset.next;  form.requestSubmit(); });
+  // ---------- pet path choice (save only if needed)
+  btnPetYes?.addEventListener('click', () => {
+    const hasRow = !!rowId.value;
+    if (hasRow && !formDirty) {
+      stashClientIds();                    // stash whatever is in the form
+      showScreen(btnPetYes.dataset.next || 'supplies-pets');
+      return;
+    }
+    nextScreenAfterSave = btnPetYes.dataset.next || 'supplies-pets';
+    form.requestSubmit();
+  });
+
+  btnPetNo?.addEventListener('click', () => {
+    const hasRow = !!rowId.value;
+    if (hasRow && !formDirty) {
+      stashClientIds();
+      showScreen(btnPetNo.dataset.next || 'supplies-items');
+      return;
+    }
+    nextScreenAfterSave = btnPetNo.dataset.next || 'supplies-items';
+    form.requestSubmit();
+  });
 
   // ---------- Back to Hub
   scr.querySelector('[data-nav="home"]')?.addEventListener('click', () => showScreen('home'));
@@ -296,6 +305,8 @@
     e.preventDefault();
     if (savingNow) return;
     setMsg('');
+
+    // Only validate when we're actually saving (we are here)
     if (!validate()) return;
 
     const payload = serialize();
@@ -307,13 +318,14 @@
       savingNow = false;
 
       if (saved && (saved.rowId || saved.RowId)) rowId.value = saved.rowId || saved.RowId;
-
-      // Stash RowId for pets screen
-      const rid = (saved && (saved.rowId || saved.RowId)) ? (saved.rowId || saved.RowId) : rowId.value;
-      try { sessionStorage.setItem('clientRowId', String(rid || '')); } catch(e) {}
-
-      // If backend assigned a ClientID (auto-generated), reflect it
+      // reflect auto-assigned ClientID if we didn't have one
       if (saved && saved.ClientID && !clientId.value) clientId.value = saved.ClientID;
+
+      // after save, not dirty anymore
+      formDirty = false;
+
+      // stash ids for next screen
+      stashClientIds({ RowId: rowId.value, ClientID: clientId.value });
 
       setMsg('Client saved.', 'success');
       document.dispatchEvent(new CustomEvent('client:saved', { detail: saved || payload }));
