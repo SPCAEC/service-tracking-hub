@@ -16,9 +16,9 @@
     if(el){ el.classList.remove('hidden'); window.scrollTo({top:0, behavior:'smooth'}); }
   }
 
-  // ---- no-op stubs so contact panel code can't crash if invoked by accident
-  const SERVICES = SERVICES || [];
-  const FOLLOWUPS = FOLLOWUPS || [];
+  // ---- safe no-op stubs so contact panel code can't crash if invoked by accident
+  var SERVICES  = (typeof SERVICES  !== 'undefined' && Array.isArray(SERVICES))  ? SERVICES  : [];
+  var FOLLOWUPS = (typeof FOLLOWUPS !== 'undefined' && Array.isArray(FOLLOWUPS)) ? FOLLOWUPS : [];
   function onlyDigits(s){ return String(s||'').replace(/\D+/g,''); }
   function renderChecks(/*containerId, names, nameAttr*/){ /* no-op in pantry-only */ }
   function getChecked(/*nameAttr*/){ return []; }
