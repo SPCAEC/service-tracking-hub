@@ -37,9 +37,10 @@ function petsEnsureColumns_(sh, required) {
 
 /** Canonical headers for Pets */
 const PETCOL = {
-  PetID:       'PetID',        // auto id (e.g., P-20250825-001, or any scheme)
-  ClientRowId: 'ClientRowId',  // FK to Clients row
-  Name:        'PetName',      // <- write name to PetName (not "Name")
+  PetID:       'PetID',            // P-YYYYMMDD-###
+  ClientRowId: 'ClientRowId',      // FK to Clients row
+  PetIndex:    'PetIndex',         // optional stable index per client (for UI order)
+  Name:        'PetName',          // write name to PetName
   Species:     'Species',
   Breed:       'Breed',
   Sex:         'Sex',
@@ -49,8 +50,8 @@ const PETCOL = {
   Color:       'Color',
   Allergies:   'Allergies',
   Notes:       'Notes',
-  Deceased:    'Deceased',     // TRUE/FALSE
-  Rehomed:     'Re-homed',     // TRUE/FALSE
+  Deceased:    'Deceased',         // TRUE/FALSE
+  Rehomed:     'Re-homed',         // TRUE/FALSE
   CreatedAt:   'CreatedAt',
   CreatedBy:   'CreatedBy',
   UpdatedAt:   'UpdatedAt',
@@ -59,6 +60,11 @@ const PETCOL = {
 
 function truthy_(v) {
   return (v === true || v === 'TRUE' || v === 'true' || v === 'Yes' || v === 'yes' || v === 1 || v === '1');
+}
+function numOrBlank(v){
+  if (v === '' || v == null) return '';
+  const n = Number(v);
+  return isNaN(n) ? '' : n;
 }
 
 /** Generate PetID: P-YYYYMMDD-### (per day) */
@@ -106,12 +112,13 @@ function apiGetPetsByClientRow(body) {
 
     pets.push({
       PetID:     r[map[PETCOL.PetID]] || '',
+      PetIndex:  r[map[PETCOL.PetIndex]] ?? '',
       Name:      r[map[PETCOL.Name]] || '',
       Species:   r[map[PETCOL.Species]] || '',
       Breed:     r[map[PETCOL.Breed]] || '',
       Sex:       r[map[PETCOL.Sex]] || '',
-      AgeYrs:    r[map[PETCOL.AgeYrs]] || '',
-      WeightLbs: r[map[PETCOL.WeightLbs]] || '',
+      AgeYrs:    r[map[PETCOL.AgeYrs]] === '' ? '' : Number(r[map[PETCOL.AgeYrs]]),
+      WeightLbs: r[map[PETCOL.WeightLbs]] === '' ? '' : Number(r[map[PETCOL.WeightLbs]]),
       Fixed:     truthy_(r[map[PETCOL.Fixed]]),
       Color:     r[map[PETCOL.Color]] || '',
       Allergies: r[map[PETCOL.Allergies]] || '',
@@ -138,6 +145,10 @@ function apiSavePets(body) {
   const now = new Date();
   const user = (function(){ try { return Session.getActiveUser().getEmail() || 'system'; } catch(e){ return 'system'; }})();
 
+  // ---- Lock (blocking) to prevent upsert race conditions
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(5000); } catch (e) {}
+
   // index existing rows by PetID (for this client only)
   const existingIdx = {};
   const lastRow = sh.getLastRow();
@@ -153,13 +164,24 @@ function apiSavePets(body) {
 
   let inserts = 0, updates = 0;
 
-  pets.forEach((pRaw, i) => {
-    // normalize inbound
-    const p = Object.assign({
-      PetID:'', Name:'', Species:'', Breed:'', Sex:'',
+  pets.forEach((pRaw) => {
+    // normalize inbound; skip truly empty objects
+    const base = {
+      PetID:'', PetIndex:'', Name:'', Species:'', Breed:'', Sex:'',
       AgeYrs:'', WeightLbs:'', Fixed:false, Color:'', Allergies:'', Notes:'',
       Deceased:false, Rehomed:false
-    }, pRaw || {});
+    };
+    const p = Object.assign(base, pRaw || {});
+    const isBlank =
+      !String(p.Name || '').trim() &&
+      !String(p.Species || '').trim() &&
+      !String(p.Breed || '').trim() &&
+      !String(p.Sex || '').trim() &&
+      p.AgeYrs === '' && p.WeightLbs === '' &&
+      !p.Fixed && !p.Deceased && !p.Rehomed &&
+      !String(p.Notes || '').trim();
+
+    if (isBlank) return;
 
     let petId = String(p.PetID || '').trim();
     if (petId && existingIdx[petId]) {
@@ -170,12 +192,13 @@ function apiSavePets(body) {
       const set = (col, val) => { const i = map[col]; if (i != null) rowArr[i] = val; };
       set(PETCOL.ClientRowId, clientRowId);
       set(PETCOL.PetID, petId);
+      set(PETCOL.PetIndex, p.PetIndex || '');
       set(PETCOL.Name, p.Name);
       set(PETCOL.Species, p.Species);
       set(PETCOL.Breed, p.Breed);
       set(PETCOL.Sex, p.Sex);
-      set(PETCOL.AgeYrs, p.AgeYrs === '' ? '' : Number(p.AgeYrs));
-      set(PETCOL.WeightLbs, p.WeightLbs === '' ? '' : Number(p.WeightLbs));
+      set(PETCOL.AgeYrs, numOrBlank(p.AgeYrs));
+      set(PETCOL.WeightLbs, numOrBlank(p.WeightLbs));
       set(PETCOL.Fixed, !!p.Fixed);
       set(PETCOL.Color, p.Color || '');
       set(PETCOL.Allergies, p.Allergies || '');
@@ -195,12 +218,13 @@ function apiSavePets(body) {
 
       set(PETCOL.ClientRowId, clientRowId);
       set(PETCOL.PetID, petId);
+      set(PETCOL.PetIndex, p.PetIndex || '');
       set(PETCOL.Name, p.Name);
       set(PETCOL.Species, p.Species);
       set(PETCOL.Breed, p.Breed);
       set(PETCOL.Sex, p.Sex);
-      set(PETCOL.AgeYrs, p.AgeYrs === '' ? '' : Number(p.AgeYrs));
-      set(PETCOL.WeightLbs, p.WeightLbs === '' ? '' : Number(p.WeightLbs));
+      set(PETCOL.AgeYrs, numOrBlank(p.AgeYrs));
+      set(PETCOL.WeightLbs, numOrBlank(p.WeightLbs));
       set(PETCOL.Fixed, !!p.Fixed);
       set(PETCOL.Color, p.Color || '');
       set(PETCOL.Allergies, p.Allergies || '');
@@ -218,9 +242,12 @@ function apiSavePets(body) {
     }
   });
 
+  try { lock.releaseLock(); } catch(e) {}
+
   Logger.log('✅ Pets upsert for client %s → %s updates, %s inserts', clientRowId, updates, inserts);
   return safeReturn_({ ok:true, updates, inserts });
 }
+
 /**
  * Read pets for a client (excluding Deceased/Rehomed).
  * @param {{ClientRowId:string}} body
@@ -242,7 +269,7 @@ function apiGetPetsForClient(body) {
     .map(r => {
       const v = (col) => (map[col] != null ? r[map[col]] : '');
       return {
-        PetID:     String(v('PetID') || ''),              // optional if you have it
+        PetID:     String(v(PETCOL.PetID) || ''),
         PetIndex:  v(PETCOL.PetIndex) ?? '',
         Name:      String(v(PETCOL.Name) || ''),
         Species:   String(v(PETCOL.Species) || ''),
@@ -250,20 +277,18 @@ function apiGetPetsForClient(body) {
         Sex:       String(v(PETCOL.Sex) || ''),
         AgeYrs:    v(PETCOL.AgeYrs) === '' ? '' : Number(v(PETCOL.AgeYrs)),
         WeightLbs: v(PETCOL.WeightLbs) === '' ? '' : Number(v(PETCOL.WeightLbs)),
-        Fixed:     v(PETCOL.Fixed) === true || String(v(PETCOL.Fixed)).toLowerCase() === 'true',
+        Fixed:     truthy_(v(PETCOL.Fixed)),
         Notes:     String(v(PETCOL.Notes) || ''),
-        Deceased:  (String(v('Deceased')).toLowerCase() === 'true'),
-        Rehomed:   (String(v('Re-homed')).toLowerCase() === 'true'),
-        _rowId:    '', // not needed on FE
+        Deceased:  truthy_(v(PETCOL.Deceased)),
+        Rehomed:   truthy_(v(PETCOL.Rehomed)),
         _client:   String(v(PETCOL.ClientRowId) || '')
       };
     })
     .filter(p => p._client === clientRowId)
     .filter(p => !p.Deceased && !p.Rehomed)
     .sort((a,b) => {
-      // stable: PetID (if present) then PetIndex
       if (a.PetID && b.PetID && a.PetID !== b.PetID) return a.PetID.localeCompare(b.PetID);
-      return (a.PetIndex||0) - (b.PetIndex||0);
+      return (Number(a.PetIndex)||0) - (Number(b.PetIndex)||0);
     });
 
   return safeReturn_({ ok:true, pets });
