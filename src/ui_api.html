@@ -1,0 +1,13 @@
+<script>
+const API = {
+  searchClient(query, cb) {
+    google.script.run.withSuccessHandler(cb).searchClient(query);
+  },
+  searchByFormId(id, cb) {
+    google.script.run.withSuccessHandler(cb).searchByFormId(id);
+  },
+  createClient(data, cb) {
+    google.script.run.withSuccessHandler(cb).createClient(data);
+  }
+};
+</script>
