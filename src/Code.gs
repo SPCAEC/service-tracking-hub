@@ -4,8 +4,15 @@ function doGet(e) {
 }
 
 function serveView(view) {
-  const template = HtmlService.createTemplateFromFile(view);
-  return template.evaluate().setTitle('Service Tracking Hub');
+  // Grab the inner content of the requested view
+  var page = HtmlService.createTemplateFromFile(view);
+  var content = page.evaluate().getContent();
+
+  // Inject into the shared shell
+  var shell = HtmlService.createTemplateFromFile('shared_shell');
+  shell.content = content;
+
+  return shell.evaluate().setTitle('Service Tracking Hub');
 }
 
 // Helper: include HTML partials
