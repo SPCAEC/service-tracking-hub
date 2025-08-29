@@ -1,10 +1,13 @@
 /** ===================== Supplies API (Orders + Lines) ===================== **
  * Depends on:
- *  - CFG (config.gs): ORDERS_SHEET_NAME, LINES_SHEET_NAME, ORDER_ID_START, SHEET_ID, FLEA_TICK_BRANDS_PROP
+ *  - CFG (config.gs): ORDERS_SHEET_NAME, LINES_SHEET_NAME, ORDER_ID_START, SHEET_ID
  *  - COL (config.gs): Clients headers (to read ClientID, ZIP)
  *  - getClientsSheet_, clientsGetHeaderMap_ (from clients_api.gs)
  *  - safeReturn_(obj) (global)
  */
+
+/** ---------- Constants ---------- */
+var FLEA_TICK_BRANDS_PROP = 'FLEA_TICK_BRANDS';
 
 /** ---------- sheet helpers ---------- */
 function getOrdersSheet_() {
@@ -40,6 +43,9 @@ function sheetEnsureColumns_(sh, required) {
   return sheetGetHeaderMap_(sh);
 }
 
+/** ---------- Helpers ---------- */
+function num(n){ n = Number(n); return isNaN(n) ? 0 : n; }
+
 /** ---------- OrderID generator: 12 digits, start at CFG.ORDER_ID_START ---------- */
 function suppliesNextOrderId_(ordersSh, ordersMap) {
   const start = String(CFG.ORDER_ID_START || '200000000000');
@@ -54,7 +60,7 @@ function suppliesNextOrderId_(ordersSh, ordersMap) {
       if (/^\d{12}$/.test(v) && v > maxId) maxId = v;
     });
   }
-  // +1 (safe for 12‑digit numeric strings)
+  // +1 (safe for 12-digit numeric strings)
   const next = String(Number(maxId) + 1).padStart(12, '0');
   return next;
 }
@@ -69,7 +75,7 @@ function programFromZip_(zip) {
 
 /** ---------- Public: brand list from Script Property ---------- */
 function apiGetFleaTickBrands() {
-  const raw = PropertiesService.getScriptProperties().getProperty('FLEA_TICK_BRANDS') || '';
+  const raw = PropertiesService.getScriptProperties().getProperty(FLEA_TICK_BRANDS_PROP) || '';
   const brands = raw.split(',').map(s => s.trim()).filter(Boolean);
   return safeReturn_({ ok:true, brands });
 }
@@ -84,7 +90,7 @@ function apiGetFleaTickBrands() {
  *     Items: { ... }  // quantites; see mapping below
  *     FleaTick: { Qty:number, Species:"Dog"|"Cat", Brand:"...", Size:"Small-Medium"|... }
  *   }
- * @return {Object} { ok:true, orderId:"200000000001", lineCount:n }
+ * @return {Object} { ok:true, orderId:"200000000001", lineCount:n, program, clientId }
  */
 function apiSaveSuppliesOrder(body) {
   Logger.log('⚡ apiSaveSuppliesOrder body=%s', JSON.stringify(body));
@@ -121,12 +127,12 @@ function apiSaveSuppliesOrder(body) {
 
   // Lock to avoid ID races
   const lock = LockService.getScriptLock();
-  try { lock.tryLock(5000); } catch(e) {}
+  try { lock.waitLock(5000); } catch(e) {}
 
   // Generate next OrderID
   const orderId = suppliesNextOrderId_(ordersSh, om);
 
-  // Parse/format service date (accept yyyy‑mm‑dd or dd/mm/yyyy)
+  // Parse/format service date (accept yyyy-mm-dd or dd/mm/yyyy)
   const sdRaw = String(body.ServiceDate || '').trim();
   let svcDate;
   if (/^\d{4}-\d{2}-\d{2}$/.test(sdRaw)) { // html date input
@@ -164,8 +170,8 @@ function apiSaveSuppliesOrder(body) {
   const lines = [];
   let lineId = 1;
   const addLine = (name, qty, unit, note) => {
-    const q = Number(qty);
-    if (!name || isNaN(q) || q <= 0) return;
+    const q = num(qty);
+    if (!name || q <= 0) return;
     const row = new Array(lh.length).fill('');
     const set = (col, val) => { const i = lm[col]; if (i != null) row[i] = val; };
     set('LineID',   lineId++);
@@ -181,23 +187,23 @@ function apiSaveSuppliesOrder(body) {
 
   // Map of front-end item fields → lines
   const items = body.Items || {};
-  addLine('Dry Dog Food', Number(items.DryDogLbs || 0), 'lbs');
-  addLine('Wet Dog Food (cans)', Number(items.WetDogCans || 0), 'each');
-  addLine('Dog Treat(s)', Number(items.DogTreats || 0), 'each');
-  addLine('Dog Toy(s)', Number(items.DogToys || 0), 'each');
-  addLine('Dog Leash(es)', Number(items.DogLeashes || 0), 'each');
-  addLine('Dog Collar(s)', Number(items.DogCollars || 0), 'each');
+  addLine('Dry Dog Food',            num(items.DryDogLbs),     'lbs');
+  addLine('Wet Dog Food (cans)',     num(items.WetDogCans),    'each');
+  addLine('Dog Treat(s)',            num(items.DogTreats),     'each');
+  addLine('Dog Toy(s)',              num(items.DogToys),       'each');
+  addLine('Dog Leash(es)',           num(items.DogLeashes),    'each');
+  addLine('Dog Collar(s)',           num(items.DogCollars),    'each');
 
-  addLine('Dry Cat Food', Number(items.DryCatLbs || 0), 'lbs');
-  addLine('Wet Cat Food (cans)', Number(items.WetCatCans || 0), 'each');
-  addLine('Cat Litter', Number(items.CatLitterLbs || 0), 'lbs');
-  addLine('Cat Treat(s)', Number(items.CatTreats || 0), 'each');
-  addLine('Cat Toy(s)', Number(items.CatToys || 0), 'each');
-  addLine('Cat Collar(s)', Number(items.CatCollars || 0), 'each');
+  addLine('Dry Cat Food',            num(items.DryCatLbs),     'lbs');
+  addLine('Wet Cat Food (cans)',     num(items.WetCatCans),    'each');
+  addLine('Cat Litter',              num(items.CatLitterLbs),  'lbs');
+  addLine('Cat Treat(s)',            num(items.CatTreats),     'each');
+  addLine('Cat Toy(s)',              num(items.CatToys),       'each');
+  addLine('Cat Collar(s)',           num(items.CatCollars),    'each');
 
   // Flea/Tick Meds: require Qty>0 and Brand/Species/Size strings to compose item name
   const ft = body.FleaTick || {};
-  const ftQty = Number(ft.Qty || 0);
+  const ftQty = num(ft.Qty);
   if (ftQty > 0) {
     const ftSpecies = String(ft.Species || '').trim();
     const ftBrand   = String(ft.Brand || '').trim();
@@ -207,13 +213,13 @@ function apiSaveSuppliesOrder(body) {
   }
 
   // Straw (bales), Pet Bed (each)
-  addLine('Straw (bales)', Number(items.StrawBales || 0), 'bale');
-  addLine('Pet Bed', Number(items.PetBeds || 0), 'each');
+  addLine('Straw (bales)',           num(items.StrawBales),    'bale');
+  addLine('Pet Bed',                 num(items.PetBeds),       'each');
 
   // Optional: Other (free text item name) with optional qty/unit
   if (body.Other && typeof body.Other === 'object') {
     const oname = String(body.Other.ItemName || '').trim();
-    const oqty  = Number(body.Other.Qty || 0);
+    const oqty  = num(body.Other.Qty);
     const ounit = String(body.Other.Unit || '').trim() || 'each';
     addLine(oname, oqty, ounit, String(body.Other.Notes || ''));
   } else if (typeof body.Other === 'string' && body.Other.trim()) {
@@ -227,5 +233,12 @@ function apiSaveSuppliesOrder(body) {
 
   try { lock.releaseLock(); } catch(e) {}
   Logger.log('✅ Saved order %s with %s line(s)', orderId, lines.length);
-  return safeReturn_({ ok:true, orderId: orderId, lineCount: lines.length });
+
+  return safeReturn_({
+    ok: true,
+    orderId,
+    lineCount: lines.length,
+    program,
+    clientId
+  });
 }

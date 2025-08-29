@@ -100,14 +100,14 @@ function apiSearchClient(q) {
   const phoneN = normPhone_(q && (q.PhoneNormalized || q.phoneRaw));
   const emailN = normEmail_(q && (q.EmailNormalized || q.emailRaw));
 
-  if (!clientId && !phoneN && !emailN) return { found: false };
+  if (!clientId && !phoneN && !emailN) return safeReturn_({ found: false });
 
   const sh = getClientsSheet_();
   clientsEnsureColumns_(sh, [COL.ClientID, COL.Phone, COL.PhoneNormalized, COL.Email, COL.EmailNormalized]);
 
   const { headers, map } = clientsGetHeaderMap_(sh);
   const lastRow = sh.getLastRow();
-  if (lastRow < 2) return { found: false };
+  if (lastRow < 2) return safeReturn_({ found: false });
 
   const idx = (name) => {
     if (map[name] != null) return map[name];
@@ -209,9 +209,9 @@ function apiSaveClient(payload) {
   try { writeObj[COL.UpdatedBy]  = Session.getActiveUser().getEmail() || 'system'; }
   catch (e) { writeObj[COL.UpdatedBy] = 'system'; }
 
-  // ---- Lock (short)
+  // ---- Lock (short, blocking) ----
   const lock = LockService.getScriptLock();
-  try { lock.tryLock(5000); } catch (e) {}
+  try { lock.waitLock(5000); } catch (e) {}
 
   // Decide target row (declare BEFORE any access/logging)
   let targetRow = Number(payload.RowId || payload[COL.RowId] || 0);

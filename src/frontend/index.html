@@ -2,119 +2,206 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <title>Service Tracking Hub — Pantry Only</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Service Tracking Hub</title>
-  <?!= include('styles'); ?>
+  <style>
+    :root{
+      --border:#e5e7eb; --muted:#6b7280; --bg:#f9fafb;
+      --brand:#0ea5e9; --brand-ink:#075985;
+      --error:#b91c1c; --error-bg:#fee2e2; --error-border:#fecaca;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; margin: 0; background: var(--bg); color: #111827; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding: .75rem 1rem; background:#fff; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10; }
+    header h1 { font-size: 1.125rem; margin: 0; }
+    #status[hidden] { display: none; }
+    #status { font-size:.9rem; color: var(--muted); }
+    main { padding: 1rem; }
+
+    .screen.hidden { display: none; }
+
+    /* Home tiles */
+    .actions { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+    .btn { display:flex; align-items: center; gap:.75rem; width:100%; border:1px solid var(--border); background:#fff; border-radius:12px; padding:.9rem 1rem; cursor:pointer; }
+    .btn .icon { width:28px; height:28px; }
+    .btn .label .title { display:block; font-weight:600; }
+    .btn .label .subtitle { display:block; color: var(--muted); font-size:.9rem; }
+
+    /* Forms */
+    .panel { background:#fff; border:1px solid var(--border); border-radius:12px; padding:1rem; max-width: 920px; margin: 0 auto; }
+    .grid { display:grid; grid-template-columns: repeat(12, 1fr); gap: 10px; }
+    .col-6 { grid-column: span 6; }
+    .col-4 { grid-column: span 4; }
+    .col-3 { grid-column: span 3; }
+    .col-12 { grid-column: span 12; }
+    label { display:block; font-size:.9rem; color:#374151; margin-bottom:4px; }
+    input[type="text"], input[type="email"], input[type="tel"], input[type="date"], select, textarea {
+      width:100%; border:1px solid var(--border); border-radius:8px; padding:.55rem .6rem; background:#fff;
+    }
+    textarea { min-height: 88px; resize: vertical; }
+    .controls { display:flex; gap:.5rem; flex-wrap: wrap; margin-top: .75rem; }
+    .btn.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+    .btn.secondary { background: #fff; color: #111827; }
+    .btn.ghost { background: transparent; border-style: dashed; }
+
+    /* Supplies entry grid */
+    .item-row { display:grid; grid-template-columns: 1fr 120px 140px; gap: 8px; align-items:center; padding: 4px 0; }
+    .item-row .name { font-weight: 500; }
+    #suppliesStatus { border:1px solid var(--border); background:#ecfeff; color: var(--brand-ink); padding:.6rem .8rem; border-radius:8px; }
+    #suppliesStatus.hidden { display: none; }
+
+    /* Toast */
+    #toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 16px;
+      background:#111827; color:#fff; padding:.6rem .9rem; border-radius:999px; font-size:.95rem; box-shadow: 0 8px 20px rgba(0,0,0,.2);
+    }
+    #toast.hidden { display:none; }
+  </style>
 </head>
 <body>
-  <main class="app" role="main">
-    <header class="header" aria-describedby="subtitle">
-      <h1>Service Tracking Hub</h1>
-      <p id="subtitle">Provided by the SPCA Serving Erie County</p>
-    </header>
 
-    <?!= include('home'); ?>
-    <?!= include('contact'); ?>
-    <?!= include('supplies-client'); ?>
-    <?!= include('supplies-pets'); ?>
-    <?!= include('supplies-entry'); ?>
+  <header>
+    <h1>Service Tracking Hub — Pantry Only</h1>
+    <div id="status">Ready</div>
+  </header>
 
-    <footer class="footer" aria-live="polite">
-      <small>SPCA Serving Erie County • Community Outreach</small>
-      <div class="status" id="status" hidden>
-        <span class="spinner" aria-hidden="true"></span>
-        <span style="margin-left:8px">Loading…</span>
+  <main>
+    <!-- =================== HOME =================== -->
+    <section id="home" class="screen">
+      <div class="row">
+        <div class="actions" role="group" aria-label="Launch modules">
+          <button class="btn" data-action="log-supplies" aria-label="Food Pantry Services">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M3 7h18M6 7v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M9 7V5a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="label">
+              <span class="title">Food Pantry Services</span>
+              <span class="subtitle">Record supplies given to a client</span>
+            </span>
+          </button>
+        </div>
       </div>
-    </footer>
+    </section>
+
+    <!-- =================== SUPPLIES: CLIENT =================== -->
+    <section id="supplies-client" class="screen hidden" aria-labelledby="suppliesClientTitle">
+      <div class="panel">
+        <h2 id="suppliesClientTitle" style="margin-top:0">Client</h2>
+        <div id="clientForm" class="grid" role="form" aria-describedby="clientHelp">
+          <div class="col-6">
+            <label for="firstName">First Name</label>
+            <input id="firstName" type="text" autocomplete="given-name" />
+          </div>
+          <div class="col-6">
+            <label for="lastName">Last Name</label>
+            <input id="lastName" type="text" autocomplete="family-name" />
+          </div>
+
+          <div class="col-12"><hr/></div>
+
+          <div class="col-12">
+            <label for="addr1">Address line 1</label>
+            <input id="addr1" type="text" autocomplete="address-line1" />
+          </div>
+          <div class="col-12">
+            <label for="addr2">Address line 2</label>
+            <input id="addr2" type="text" autocomplete="address-line2" />
+          </div>
+
+          <div class="col-4">
+            <label for="city">City</label>
+            <input id="city" type="text" autocomplete="address-level2" />
+          </div>
+          <div class="col-4">
+            <label for="state">State</label>
+            <input id="state" type="text" maxlength="2" placeholder="NY" autocomplete="address-level1" />
+          </div>
+          <div class="col-4">
+            <label for="zip">ZIP</label>
+            <input id="zip" type="text" inputmode="numeric" />
+          </div>
+
+          <div class="col-6">
+            <label for="phone">Phone</label>
+            <input id="phone" type="tel" autocomplete="tel" />
+          </div>
+          <div class="col-6">
+            <label for="email">Email</label>
+            <input id="email" type="email" autocomplete="email" />
+          </div>
+
+          <div class="col-12">
+            <label><input type="checkbox" id="consentEmail" /> Email consent on file</label>
+            <label style="margin-left:1rem;"><input type="checkbox" id="consentSMS" /> SMS consent on file</label>
+          </div>
+
+          <div class="col-12" id="clientHelp" style="color:var(--muted); font-size:.9rem;">
+            Save the client, then choose whether to add pets before recording supplies.
+          </div>
+
+          <div class="col-12 controls">
+            <button class="btn primary" id="saveClientNext" type="button">Save Client</button>
+            <button class="btn secondary" id="btnPetYes" type="button">Save & Add Pets</button>
+            <button class="btn ghost" id="btnPetNo" type="button">Save & Continue to Supplies</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== SUPPLIES: PETS (minimal placeholder) =================== -->
+    <section id="supplies-pets" class="screen hidden" aria-labelledby="suppliesPetsTitle">
+      <div class="panel">
+        <h2 id="suppliesPetsTitle" style="margin-top:0">Pets</h2>
+        <p style="color:var(--muted)">Pet management screen (add/update pets) can be expanded later. For now, proceed to record supplies.</p>
+        <div class="controls">
+          <button class="btn secondary" data-nav="supplies-client" type="button">Back to Client</button>
+          <button class="btn primary" data-nav="supplies-entry" type="button">Continue to Supplies</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== SUPPLIES: ENTRY =================== -->
+    <section id="supplies-entry" class="screen hidden" aria-labelledby="suppliesEntryTitle">
+      <div class="panel">
+        <h2 id="suppliesEntryTitle" style="margin-top:0">Supplies Given</h2>
+
+        <div id="suppliesStatus" class="hidden" role="status" aria-live="polite"></div>
+
+        <div class="grid" style="margin-top: .75rem;">
+          <div class="col-3">
+            <label for="svcDate">Service Date</label>
+            <input id="svcDate" type="date" />
+          </div>
+          <div class="col-4">
+            <label for="deliveryType">Delivery / Pickup</label>
+            <select id="deliveryType">
+              <option value="">—</option>
+              <option>Pickup</option>
+              <option>Delivery</option>
+              <option>Curbside</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label for="orderNotes">Notes</label>
+            <textarea id="orderNotes" placeholder="Any details to capture…"></textarea>
+          </div>
+        </div>
+
+        <h3 style="margin-top:1rem;">Items</h3>
+        <div id="itemsGrid" class="grid" aria-live="polite" aria-label="Items grid"></div>
+
+        <div class="controls">
+          <button class="btn secondary" id="cancelSuppliesBtn" type="button">Cancel</button>
+          <button class="btn primary" id="saveSuppliesBtn" type="button">Save Supplies</button>
+        </div>
+      </div>
+    </section>
   </main>
 
-  <div id="toast" class="msg hidden" role="status" aria-live="polite"></div>
+  <!-- Toast -->
+  <div id="toast" class="hidden" role="status" aria-live="polite"></div>
 
-  <!-- Confirm Another Client Modal -->
-  <div id="anotherClientModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="anotherClientTitle" aria-describedby="anotherClientDesc">
-    <div class="modal-backdrop" data-close></div>
-    <div class="modal-card" role="document">
-      <h3 id="anotherClientTitle">Record supplies for another client?</h3>
-      <p id="anotherClientDesc">You can start a new entry or return to the hub.</p>
-      <div class="modal-actions">
-        <button type="button" class="btn primary" id="anotherYesBtn">Yes, new client</button>
-        <button type="button" class="btn secondary" id="anotherNoBtn">No, back to hub</button>
-      </div>
-      <button type="button" class="modal-close" title="Close" aria-label="Close" data-close>&times;</button>
-    </div>
-  </div>
-
+  <!-- App script (your pantry-only logic lives here) -->
   <?!= include('app'); ?>
 </body>
 </html>
-
-<script>
-/** Frontend ↔︎ Apps Script shim (defensive) */
-(function () {
-  function parseMaybeJSON(x) {
-    if (!x) return x;
-    if (typeof x === 'string') {
-      try { return JSON.parse(x); } catch { return x; }
-    }
-    return x;
-  }
-
-  function call(runFn, payload, onSuccess, onFailure) {
-    if (!(window.google && google.script && google.script.run)) {
-      // local mock
-      setTimeout(() => onSuccess && onSuccess({ ok: true, mock: true, fn: runFn }), 200);
-      return;
-    }
-    google.script.run
-      .withSuccessHandler(function (res) {
-        const out = parseMaybeJSON(res);
-        console.log(`[shim] ${runFn} →`, out);
-        onSuccess && onSuccess(out);
-      })
-      .withFailureHandler(function (err) {
-        console.error(`[shim] ${runFn} error`, err);
-        onFailure && onFailure(err);
-      })[runFn](payload);
-  }
-  window.clientsApi = Object.assign(window.clientsApi || {}, {
-  // already present: search, save, savePets, getFleaTickBrands, saveOrder
-  getPets: function (p, ok, fail) {
-    // p: { ClientRowId: "2" }
-    (function call(runFn, payload, onSuccess, onFailure){
-      if (!(window.google && google.script && google.script.run)) {
-        setTimeout(()=>onSuccess && onSuccess({ ok:true, pets:[] }), 150);
-        return;
-      }
-      google.script.run
-        .withSuccessHandler(res => onSuccess && onSuccess(res))
-        .withFailureHandler(err => onFailure && onFailure(err))
-        [runFn](payload);
-    })('apiGetPetsByClientRow', p, ok, fail);
-    }
-  });
-
-  // Create or extend the namespace safely
-  window.clientsApi = Object.assign(window.clientsApi || {}, {
-    /** Search client by ClientID / PhoneNormalized / EmailNormalized */
-    search: function (q, ok, fail) {
-      call('apiSearchClient', q, ok, fail);
-    },
-    /** Save (upsert) client; payload uses sheet header keys */
-    save: function (p, ok, fail) {
-      call('apiSaveClient', p, ok, fail);
-    },
-    /** Save pets for a client */
-    savePets: function (p, ok, fail) {
-      call('apiSavePets', p, ok, fail);
-    },
-    /** Get Flea/Tick brand options from Script Property FLEA_TICK_BRANDS */
-    getFleaTickBrands: function (_ignored, ok, fail) {
-      call('apiGetFleaTickBrands', {}, ok, fail);
-    },
-    /** Save a supplies order + line items */
-    saveOrder: function (p, ok, fail) {
-      call('apiSaveSuppliesOrder', p, ok, fail);
-    }
-  });
-})();
-</script>
