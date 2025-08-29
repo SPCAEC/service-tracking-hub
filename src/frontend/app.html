@@ -1,0 +1,648 @@
+<script>
+(function(){
+  const toast = document.getElementById('toast');
+  const statusEl = document.getElementById('status');
+
+  function showToast(message, ms=2200){
+    toast.textContent = message;
+    toast.classList.remove('hidden');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=> toast.classList.add('hidden'), ms);
+  }
+  function setLoading(is){ statusEl.hidden = !is; }
+  function navigate(id){
+    document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+    const el = document.getElementById(id);
+    if(el){ el.classList.remove('hidden'); window.scrollTo({top:0, behavior:'smooth'}); }
+  }
+
+  // ---- safe no-op stubs so contact panel code can't crash if invoked by accident
+  var SERVICES  = (typeof SERVICES  !== 'undefined' && Array.isArray(SERVICES))  ? SERVICES  : [];
+  var FOLLOWUPS = (typeof FOLLOWUPS !== 'undefined' && Array.isArray(FOLLOWUPS)) ? FOLLOWUPS : [];
+  function onlyDigits(s){ return String(s||'').replace(/\D+/g,''); }
+  function renderChecks(/*containerId, names, nameAttr*/){ /* no-op in pantry-only */ }
+  function getChecked(/*nameAttr*/){ return []; }
+
+  function setIf(id, val){
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  }
+
+  function getVal(id){
+  const el = document.getElementById(id);
+  return el ? el.value : '';
+  }
+
+  // ---------- STATE ----------
+  let currentClientRowId = null;  // row number in Clients sheet (required by backend)
+  let currentClientId = null;     // optional (string id) if you happen to need it
+
+  // ---------- ITEM DEFINITIONS ----------
+  const ITEM_DEFS = [
+    { key:'dry_dog_food',   label:'Dry Dog Food',    defaultUnit:'lbs',  units:['lbs','oz','kg'] },
+    { key:'canned_dog_food',label:'Canned Dog Food', defaultUnit:'each', units:['each','fl oz','can','pouch'] },
+    { key:'dog_treats',     label:'Dog Treats',      defaultUnit:'each', units:['each','bag','box','pouch','lbs','oz'] },
+    { key:'dog_collar',     label:'Dog Collar',      defaultUnit:'each', units:['each'] },
+    { key:'dog_leash',      label:'Dog Leash',       defaultUnit:'each', units:['each'] },
+    { key:'dog_toys',       label:'Dog Toys',        defaultUnit:'each', units:['each','pack'] },
+
+    { key:'dry_cat_food',   label:'Dry Cat Food',    defaultUnit:'lbs',  units:['lbs','oz','kg'] },
+    { key:'canned_cat_food',label:'Canned Cat Food', defaultUnit:'each', units:['each','fl oz','can','pouch'] },
+    { key:'cat_treats',     label:'Cat Treats',      defaultUnit:'each', units:['each','bag','box','pouch','lbs','oz'] },
+    { key:'cat_collar',     label:'Cat Collar',      defaultUnit:'each', units:['each'] },
+    { key:'cat_toys',       label:'Cat Toys',        defaultUnit:'each', units:['each'] },
+
+    { key:'cat_litter',     label:'Cat Litter',      defaultUnit:'lbs',  units:['lbs','bag','box','kg','oz'] },
+    { key:'pet_bed',        label:'Pet Bed',         defaultUnit:'each', units:['each'] },
+    { key:'straw',          label:'Straw',           defaultUnit:'bale', units:['bale','package','bag'] },
+
+    { key:'other',          label:'Other',           defaultUnit:'each', units:null, isOther:true },
+  ];
+  const ALL_UNITS = Array.from(new Set(ITEM_DEFS.flatMap(d => d.units || []))).sort();
+
+  // ---------- PET CARDS ----------
+  const petGrid = document.getElementById('petGrid');
+  const SEX_OPTS = ['Male','Female','Unknown'];
+  const FIX_OPTS = ['Spayed','Neutered','Intact','Unknown'];
+  const SPECIES_OPTS = ['Dog','Cat','Other'];
+
+  function setPetEnabled(card, enabled){
+    card.classList.toggle('disabled', !enabled);
+    card.querySelectorAll('input, select, textarea').forEach(el=>{
+      if(el.classList.contains('pet-enable')) return;
+      el.disabled = !enabled;
+    });
+  }
+
+  // ---------- RENDER: ITEMS GRID ----------
+  function renderItemsGrid() {
+    const grid = document.getElementById('itemsGrid');
+    grid.innerHTML = '';
+    ITEM_DEFS.forEach(def => {
+      const row = document.createElement('div');
+      row.className = 'item-row ' + (def.isOther ? 'other' : '');
+      let nameEl;
+      if (def.isOther) {
+        nameEl = document.createElement('input');
+        nameEl.type = 'text';
+        nameEl.placeholder = 'Describe item…';
+        nameEl.id = `other_label`;
+      } else {
+        nameEl = document.createElement('div');
+        nameEl.className = 'name';
+        nameEl.textContent = def.label;
+      }
+      const qty = document.createElement('input');
+      qty.type = 'number'; qty.min = '0'; qty.step = 'any';
+      qty.id = `qty_${def.key}`; qty.placeholder = 'Qty';
+      const unit = document.createElement('select');
+      unit.id = `unit_${def.key}`;
+      const units = def.isOther ? (['each', ...ALL_UNITS.filter(u => u !== 'each')]) : def.units;
+      (units || []).forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u; opt.textContent = u;
+        if (u === def.defaultUnit) opt.selected = true;
+        unit.appendChild(opt);
+      });
+      row.appendChild(nameEl);
+      row.appendChild(qty);
+      row.appendChild(unit);
+      grid.appendChild(row);
+    });
+  }
+
+  // ---------- COLLECTORS ----------
+  function collectClientPayload() {
+    const el = id => document.getElementById(id);
+    return {
+      client: {
+        firstName: el('firstName').value.trim(),
+        lastName:  el('lastName').value.trim(),
+        addr1:     el('addr1').value.trim(),
+        addr2:     el('addr2').value.trim(),
+        city:      el('city').value.trim(),
+        state:     el('state').value.trim(),
+        zip:       el('zip').value.trim(),
+        phone:     el('phone').value.trim(),
+        email:     el('email').value.trim(),
+        consentEmail: el('consentEmail').checked,
+        consentSMS:   el('consentSMS').checked,
+        consentNote:  ''
+      },
+      pets: []
+    };
+  }
+  function collectLineItemsFromUI() {
+    const items = [];
+    ITEM_DEFS.forEach(def => {
+      const qtyEl = document.getElementById(`qty_${def.key}`);
+      const unitEl = document.getElementById(`unit_${def.key}`);
+      const qty = qtyEl ? Number(qtyEl.value) : 0;
+      if (!qty || qty <= 0) return;
+      let name = def.label;
+      if (def.isOther) {
+        const labelEl = document.getElementById('other_label');
+        const custom = (labelEl?.value || '').trim();
+        if (!custom) return;
+        name = custom;
+      }
+      items.push({ item: name, qty, unit: unitEl?.value || def.defaultUnit });
+    });
+    return items;
+  }
+
+  // ---------- BACKEND BRIDGE (pantry-only shims) ----------
+  function pantrySearchClient_(query){
+    return new Promise((resolve, reject)=>{
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .pantry_searchClient(query);
+    });
+  }
+  function pantrySaveClient_(payload){
+    return new Promise((resolve, reject)=>{
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .pantry_saveClient(payload);
+    });
+  }
+  function pantryRecordSupplies_(body){
+    return new Promise((resolve, reject)=>{
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .pantry_recordSupplies(body);
+    });
+  }
+
+  async function upsertClient_(payload){
+    // Flatten nested client payload for the backend
+    const body = Object.assign(
+      {},
+      payload && payload.client ? payload.client : {},
+      payload && payload.clientId ? { clientId: payload.clientId } : {}
+    );
+
+    const res = await pantrySaveClient_(body);
+    if (res && res.ok){
+      currentClientRowId = Number(res.rowId || 0) || currentClientRowId;
+      currentClientId    = res.ClientID || currentClientId || null;
+      try {
+        sessionStorage.setItem('clientRowId', String(currentClientRowId || ''));
+        sessionStorage.setItem('clientClientID', String(currentClientId || ''));
+      } catch(e){}
+    }
+    return res;
+  }
+
+  // ---------- CONTACT PANEL ----------
+  function initContactPanel(){
+    const hint = document.getElementById('ccLookupHint');
+    if (!hint) return; // panel might not be visible yet
+    document.getElementById('ccLookupPhone').value = '';
+    hint.textContent = 'Enter a phone number and click Search.';
+    document.getElementById('ccFoundCard').style.display = 'none';
+    document.getElementById('ccNewCard').style.display = 'none';
+    renderChecks('ccFoundServices',  SERVICES,  'ccFoundService');
+    renderChecks('ccNewServices',    SERVICES,  'ccNewService');
+    renderChecks('ccFoundFollowups', FOLLOWUPS, 'ccFoundFollowup');
+    renderChecks('ccNewFollowups',   FOLLOWUPS, 'ccNewFollowup');
+  }
+
+  const clearBtn = document.getElementById('ccClearBtn');
+  if (clearBtn) clearBtn.addEventListener('click', initContactPanel);
+
+  const lookupBtn = document.getElementById('ccLookupBtn');
+  if (lookupBtn) lookupBtn.addEventListener('click', () => {
+    const raw = document.getElementById('ccLookupPhone').value;
+    const phoneDigits = onlyDigits(raw);
+    if (!phoneDigits){ showToast('Enter a phone number to search.'); return; }
+    setLoading(true);
+
+    pantrySearchClient_({ phoneRaw: phoneDigits })
+      .then(res => {
+        setLoading(false);
+        if (res && res.found && res.client){
+          const c = res.client;
+
+          // ✅ capture RowId (sheet row) and ClientID
+          currentClientRowId = Number(c.RowId || 0) || null;
+          currentClientId    = c.ClientID || null;
+
+          document.getElementById('ccFirstName').value   = c.firstName || '';
+          document.getElementById('ccLastName').value    = c.lastName || '';
+          document.getElementById('ccZIP').value         = c.zip || '';
+          document.getElementById('ccPhone').value       = c.phone || '';
+          document.getElementById('ccEmail').value       = c.email || '';
+          document.getElementById('ccAddr1').value       = c.addr1 || '';
+          document.getElementById('ccAddr2').value       = c.addr2 || '';
+          document.getElementById('ccCity').value        = c.city || '';
+          document.getElementById('ccState').value       = c.state || '';
+          document.getElementById('ccFoundNotes').value  = '';
+
+          document.getElementById('ccFoundCard').style.display = 'block';
+          document.getElementById('ccNewCard').style.display   = 'none';
+          document.getElementById('ccLookupHint').textContent  = 'Match found. Verify info, select services/follow-ups, then Save.';
+        } else {
+          currentClientRowId = null;
+          currentClientId    = null;
+
+          document.getElementById('ccNPhone').value = raw;
+          document.getElementById('ccFoundCard').style.display = 'none';
+          document.getElementById('ccNewCard').style.display   = 'block';
+          document.getElementById('ccLookupHint').textContent  = 'No match. Add new client below.';
+        }
+      })
+      .catch(err => { 
+        setLoading(false); 
+        showToast('Lookup failed.'); 
+        console.error(err); 
+      });
+  });
+
+  function validateMinimal(first, last, zip, phone, email){
+    if (!first || !last || !zip) return 'First, Last, and ZIP are required.';
+    if (!phone && !email) return 'Provide at least a phone or email.';
+    return null;
+  }
+
+  async function saveFoundClient_(addPets=false){
+    const first = document.getElementById('ccFirstName').value.trim();
+    const last  = document.getElementById('ccLastName').value.trim();
+    const zip   = document.getElementById('ccZIP').value.trim();
+    const phone = document.getElementById('ccPhone').value.trim();
+    const email = document.getElementById('ccEmail').value.trim();
+    const err = validateMinimal(first, last, zip, phone, email);
+    if (err){ showToast(err); return; }
+
+    const payload = {
+      clientId: currentClientId || null,
+      client: {
+        firstName:first, lastName:last,
+        addr1: document.getElementById('ccAddr1').value.trim(),
+        addr2: document.getElementById('ccAddr2').value.trim(),
+        city:  document.getElementById('ccCity').value.trim(),
+        state: document.getElementById('ccState').value.trim(),
+        zip, phone, email,
+        consentEmail:false, consentSMS:false
+      },
+      pets:[]
+    };
+
+    const services  = getChecked('ccFoundService');
+    const followups = getChecked('ccFoundFollowup');
+    const notes     = document.getElementById('ccFoundNotes').value.trim();
+
+    setLoading(true);
+    try{
+      const up = await upsertClient_(payload);
+      currentClientId = up.ClientID || currentClientId;
+      try { google.script.run.logContactInteraction && google.script.run.logContactInteraction({ clientId: currentClientId, phoneSearched: document.getElementById('ccLookupPhone').value, services, followups, notes }); } catch(e){}
+      showToast('Client saved.');
+      if (addPets){ petsFromContactFlow = true; navigate('supplies-pets'); }
+    } catch(e){ console.error(e); showToast('Save failed.'); }
+    finally { setLoading(false); }
+  }
+
+  async function saveNewClient_(addPets=false){
+    const first = document.getElementById('ccNFirstName').value.trim();
+    const last  = document.getElementById('ccNLastName').value.trim();
+    const zip   = document.getElementById('ccNZIP').value.trim();
+    const phone = document.getElementById('ccNPhone').value.trim();
+    const email = document.getElementById('ccNEmail').value.trim();
+    const err = validateMinimal(first, last, zip, phone, email);
+    if (err){ showToast(err); return; }
+
+    const payload = {
+      client: {
+        firstName:first, lastName:last,
+        addr1: document.getElementById('ccNAddr1').value.trim(),
+        addr2: document.getElementById('ccNAddr2').value.trim(),
+        city:  document.getElementById('ccNCity').value.trim(),
+        state: document.getElementById('ccNState').value.trim(),
+        zip, phone, email,
+        consentEmail:false, consentSMS:false
+      },
+      pets:[]
+    };
+
+    const services  = getChecked('ccNewService');
+    const followups = getChecked('ccNewFollowup');
+    const notes     = document.getElementById('ccNewNotes').value.trim();
+
+    setLoading(true);
+    try{
+      const up = await upsertClient_(payload);
+      currentClientId = up.ClientID || currentClientId;
+      try { google.script.run.logContactInteraction && google.script.run.logContactInteraction({ clientId: currentClientId, phoneSearched: document.getElementById('ccLookupPhone').value, services, followups, notes }); } catch(e){}
+      showToast('Client saved.');
+      if (addPets){ petsFromContactFlow = true; navigate('supplies-pets'); }
+    } catch(e){ console.error(e); showToast('Save failed.'); }
+    finally { setLoading(false); }
+  }
+
+  const foundSave = document.getElementById('ccFoundSave');
+  if (foundSave) foundSave.addEventListener('click', () => saveFoundClient_(false));
+  const foundSavePets = document.getElementById('ccFoundSavePets');
+  if (foundSavePets) foundSavePets.addEventListener('click', () => saveFoundClient_(true));
+  const newSave = document.getElementById('ccNewSave');
+  if (newSave) newSave.addEventListener('click', () => saveNewClient_(false));
+  const newSavePets = document.getElementById('ccNewSavePets');
+  if (newSavePets) newSavePets.addEventListener('click', () => saveNewClient_(true));
+
+  // ---------- SUPPLIES HELPERS ----------
+  function showSuppliesStatus(msg, isError=false){
+    const el = document.getElementById('suppliesStatus');
+    if (!el) { console.warn('suppliesStatus element not found'); return; } // <-- guard
+
+    el.textContent = msg;
+    el.classList.toggle('hidden', false);
+    el.style.background = isError ? 'var(--error-bg)' : '#ecfeff';
+    el.style.borderColor = isError ? 'var(--error-border)' : 'var(--border)';
+    el.style.color = isError ? 'var(--error)' : '#075985';
+  }
+
+  function clearSuppliesStatus(){ document.getElementById('suppliesStatus').classList.add('hidden'); }
+
+  function initSuppliesPanel(){
+    clearSuppliesStatus();
+
+    // svcDate may not exist in some templates; guard it
+    const svc = document.getElementById('svcDate');
+    if (svc) svc.valueAsDate = new Date();
+
+    // these fields aren’t always present in every layout
+    setIf('program', '');
+    setIf('deliveryType', '');
+    setIf('orderNotes', '');
+
+    renderItemsGrid();
+  }
+
+    // --- Modal helpers ---
+  function openAnotherClientModal(){
+    const m = document.getElementById('anotherClientModal');
+    if (!m) return;
+    m.classList.remove('hidden');
+    // basic focus: move to first button
+    setTimeout(()=> document.getElementById('anotherYesBtn')?.focus(), 0);
+  }
+  function closeAnotherClientModal(){
+    document.getElementById('anotherClientModal')?.classList.add('hidden');
+  }
+  // clicks on backdrop or [data-close] close the modal
+  document.addEventListener('click', (e)=>{
+    if (e.target.matches('#anotherClientModal [data-close], #anotherClientModal .modal-backdrop')) {
+      closeAnotherClientModal();
+    }
+  });
+  // Esc closes
+  document.addEventListener('keydown', (e)=>{
+    if (e.key === 'Escape') closeAnotherClientModal();
+  });
+
+  // What to do on Yes/No
+  document.addEventListener('click', (e)=>{
+    if (e.target && e.target.id === 'anotherYesBtn') {
+      // start fresh: clear any saved client/pets draft and go to client screen
+      try {
+        sessionStorage.removeItem('clientRowId');
+        sessionStorage.removeItem('clientClientID');
+        sessionStorage.removeItem('petsDraft');
+      } catch(e){}
+      // clear visible client form if present
+      const f = document.getElementById('clientForm');
+      if (f) f.reset();
+      closeAnotherClientModal();
+      navigate('supplies-client');
+    }
+    if (e.target && e.target.id === 'anotherNoBtn') {
+      closeAnotherClientModal();
+      navigate('home'); // back to Hub
+    }
+  });
+
+
+ // ---------- HOME LAUNCHERS (pantry-only) ----------
+  const handlers = {
+    // The one we keep:
+    'log-supplies': () => { 
+      currentClientRowId = null; 
+      currentClientId = null; 
+      navigate('supplies-client'); 
+    }
+  };
+
+  // Wire buttons: enable pantry, disable everything else
+  document.querySelectorAll('[data-action]').forEach(btn => {
+    const action = btn.getAttribute('data-action');
+    if (!handlers[action]) {
+      // Visually and functionally disable non-pantry tiles
+      btn.setAttribute('disabled', 'true');
+      btn.classList.add('disabled');
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        showToast('This section is not available in pantry-only mode.');
+      });
+    } else {
+      btn.addEventListener('click', async () => {
+        try { setLoading(true); handlers[action](); } finally { setLoading(false); }
+      });
+    }
+  });
+
+  // Keep keyboard accessibility sane: prevent Enter/Space on disabled tiles
+  document.addEventListener('keydown', (e)=>{
+    if((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-action].disabled')){
+      e.preventDefault();
+      showToast('This section is not available in pantry-only mode.');
+    }
+  });
+
+  // ---------- CLIENT (Pantry) ----------
+  async function saveClientOnly_(){
+    const payload = collectClientPayload(); // pets empty here
+    const res = await upsertClient_(payload); // uses pantrySaveClient_ under the hood
+    // rowId + ClientID are persisted by upsertClient_ already
+    if (!res || !res.ok) throw new Error(res && res.error ? res.error : 'Client save failed');
+    showToast('Client saved.');
+    return res;
+  }
+  const petYes = document.getElementById('btnPetYes');
+  if (petYes) petYes.addEventListener('click', async () => {
+    try { 
+      setLoading(true); 
+      await saveClientOnly_(); 
+      navigate('supplies-pets'); 
+    } catch(err){ 
+      console.error(err); 
+      showToast('Could not save client.'); 
+    } finally{ 
+      setLoading(false); 
+    }
+  });
+
+  const petNo = document.getElementById('btnPetNo');
+  if (petNo) petNo.addEventListener('click', async () => {
+    try { 
+      setLoading(true); 
+      await saveClientOnly_(); 
+      initSuppliesPanel(); 
+      navigate('supplies-entry'); 
+    } catch(err){ 
+      console.error(err); 
+      showToast('Could not save client.'); 
+    } finally { 
+      setLoading(false); 
+    }
+  });
+
+  const saveClientBtn = document.getElementById('saveClientNext');
+  if (saveClientBtn) saveClientBtn.addEventListener('click', async () => {
+    try { 
+      setLoading(true); 
+      await saveClientOnly_(); 
+      // stay on screen — user might edit pets next or jump to supplies
+    } catch(err){ 
+      console.error(err); 
+      showToast('Could not save client.'); 
+    } finally{ 
+      setLoading(false); 
+    }
+  });
+
+  function mapItemsForBackend_(items){
+    // Initialize all known fields to 0
+    const out = {
+      DryDogLbs:0, WetDogCans:0, DogTreats:0, DogToys:0, DogLeashes:0, DogCollars:0,
+      DryCatLbs:0, WetCatCans:0, CatLitterLbs:0, CatTreats:0, CatToys:0, CatCollars:0,
+      StrawBales:0, PetBeds:0
+    };
+    const norm = (s) => String(s||'').toLowerCase();
+
+    items.forEach(({item, qty, unit})=>{
+      const name = norm(item);
+      const u = norm(unit);
+
+      // Dogs
+      if (name.includes('dry dog food')) { if (u==='lbs') out.DryDogLbs += Number(qty)||0; }
+      else if (name.includes('wet dog food') || name.includes('canned dog food')) {
+        if (u==='each' || u==='can') out.WetDogCans += Number(qty)||0;
+      }
+      else if (name.includes('dog treat'))   { out.DogTreats   += Number(qty)||0; }
+      else if (name.includes('dog toy'))     { out.DogToys     += Number(qty)||0; }
+      else if (name.includes('dog leash'))   { out.DogLeashes  += Number(qty)||0; }
+      else if (name.includes('dog collar'))  { out.DogCollars  += Number(qty)||0; }
+
+      // Cats
+      else if (name.includes('dry cat food')) { if (u==='lbs') out.DryCatLbs += Number(qty)||0; }
+      else if (name.includes('wet cat food') || name.includes('canned cat food')) {
+        if (u==='each' || u==='can') out.WetCatCans += Number(qty)||0;
+      }
+      else if (name.includes('cat litter'))   { if (u==='lbs') out.CatLitterLbs += Number(qty)||0; }
+      else if (name.includes('cat treat'))    { out.CatTreats   += Number(qty)||0; }
+      else if (name.includes('cat toy'))      { out.CatToys     += Number(qty)||0; }
+      else if (name.includes('cat collar'))   { out.CatCollars  += Number(qty)||0; }
+
+      // Other
+      else if (name.includes('straw'))        { out.StrawBales += Number(qty)||0; }
+      else if (name.includes('pet bed'))      { out.PetBeds    += Number(qty)||0; }
+    });
+
+    return out;
+  }
+
+  // ---------- SUPPLIES ----------
+  const saveSuppliesBtn = document.getElementById('saveSuppliesBtn');
+    if (saveSuppliesBtn) saveSuppliesBtn.addEventListener('click', async () => {
+      if (!currentClientRowId) {
+        // fallback to session storage if available
+        try { currentClientRowId = Number(sessionStorage.getItem('clientRowId')||0) || null; } catch(e){}
+      }
+      if (!currentClientRowId) { 
+        showSuppliesStatus('No client saved yet.', true); 
+        return; 
+      }
+
+      try {
+        setLoading(true);
+        const items = collectLineItemsFromUI();
+        const mapped = mapItemsForBackend_(items);
+
+        const body = {
+          ClientRowId: String(currentClientRowId),
+          ServiceDate: document.getElementById('svcDate').value || '',
+          DeliveryType: document.getElementById('deliveryType').value || '',
+          Notes: document.getElementById('orderNotes').value || '',
+          Items: mapped
+          // FleaTick: { Qty, Species, Brand, Size } // placeholder for later
+        };
+
+        const res = await pantryRecordSupplies_(body);
+        if (res && res.ok){
+          const msg = `Saved ${res.lineCount || 0} line item${(res.lineCount===1?'':'s')}.`;
+          showSuppliesStatus(msg, false);
+          showToast('Supplies saved.');
+          openAnotherClientModal();
+        } else {
+          showSuppliesStatus(res && res.error ? String(res.error) : 'Save failed.', true);
+        }
+      } catch(err){
+        console.error(err);
+        showSuppliesStatus(String(err), true);
+      } finally {
+        setLoading(false);
+      }
+    });
+
+  const cancelSuppliesBtn = document.getElementById('cancelSuppliesBtn');
+  if (cancelSuppliesBtn) cancelSuppliesBtn.addEventListener('click', () => navigate('home'));
+
+  // Generic data-nav
+  document.querySelectorAll('[data-nav]').forEach(btn => btn.addEventListener('click', (e)=>{
+    navigate(e.currentTarget.getAttribute('data-nav'));
+  }));
+
+  // Keyboard accessibility for launcher buttons
+  document.addEventListener('keydown', (e)=>{
+    if((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-action]')){
+      e.preventDefault(); e.target.click();
+    }
+  });
+})();
+</script>
+
+<!-- Another Client Modal -->
+<div id="anotherClientModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="anotherClientTitle">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-content">
+    <h3 id="anotherClientTitle">Order saved</h3>
+    <p>Would you like to record supplies for another client?</p>
+    <div class="controls">
+      <button type="button" class="btn" id="anotherNoBtn">No, back to hub</button>
+      <button type="button" class="btn primary" id="anotherYesBtn">Yes, new client</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .modal.hidden { display: none; }
+  .modal {
+    position: fixed; inset: 0; display:flex; align-items:center; justify-content:center;
+    background: rgba(0,0,0,.5); z-index: 1000;
+  }
+  .modal-content {
+    background:#fff; padding:1.5rem; border-radius:12px; max-width:400px; width:90%;
+    box-shadow:0 2px 8px rgba(0,0,0,.2);
+    text-align:center;
+  }
+  .modal .controls { margin-top:1rem; display:flex; gap:.5rem; justify-content:center; }
+
+  button.disabled, [data-action].disabled {
+  opacity: .5;
+  pointer-events: auto; /* we still catch click to show toast */
+  cursor: not-allowed;
+}
+</style>
