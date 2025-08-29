@@ -1,0 +1,25 @@
+<script>
+const UI_PantryClient = {
+  search: function() {
+    const query = {
+      clientId: document.getElementById('inpClientId').value.trim(),
+      phone: document.getElementById('inpPhone').value.trim(),
+      email: document.getElementById('inpEmail').value.trim(),
+      formId: document.getElementById('inpFormId').value.trim()
+    };
+    if (query.formId) {
+      API.searchByFormId(query.formId, UI_PantryClient.renderResult);
+    } else {
+      API.searchClient(query, UI_PantryClient.renderResult);
+    }
+  },
+  renderResult: function(res) {
+    const el = document.getElementById('result');
+    if (res && res.found) {
+      el.innerHTML = `<div>Client found: ${JSON.stringify(res.client)}</div>`;
+    } else {
+      el.innerHTML = `<div>No match found. Show "Create Client" form here.</div>`;
+    }
+  }
+};
+</script>

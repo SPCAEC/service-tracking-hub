@@ -1,0 +1,12 @@
+<script>
+const APP = {
+  nav: {
+    to: function(view) {
+      window.location.search = '?view=' + encodeURIComponent(view);
+    }
+  },
+  toast: function(msg) {
+    alert(msg); // placeholder
+  }
+};
+</script>
