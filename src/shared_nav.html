@@ -1,3 +1,7 @@
-<header>
-  <span onclick="APP.nav.to('hub')" style="cursor:pointer;">🏠 Hub</span>
+<header class="topbar">
+  <nav class="crumbs">
+    <button class="crumb-home" onclick="APP.nav.to('hub')" aria-label="Go to Hub">🏠</button>
+    <span class="sep">/</span>
+    <span id="crumb-current">Hub</span>
+  </nav>
 </header>
