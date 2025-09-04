@@ -1,3 +1,4 @@
+<? var BASE = ScriptApp.getService().getUrl(); ?>
 <!DOCTYPE html>
 <html>
 <head>
@@ -12,6 +13,9 @@
       <?!= content ?>
     </main>
   </div>
+
+  <!-- Make the exec URL available to client-side code -->
+  <script>window.BASE_EXEC_URL = '<?= BASE ?>';</script>
 
   <?!= include('ui_core'); ?>
   <?!= include('ui_api'); ?>
