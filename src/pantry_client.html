@@ -1,1 +1,35 @@
-<div style="padding:16px;background:gold;font-weight:700">CLIENT PAGE LOADED</div>
+<h2>Record Food Pantry Services</h2>
+<p>Search for an existing client by ClientID, Phone Number, Email Address, or FormID.</p>
+
+<!-- Search inputs -->
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+  <div class="field">
+    <label>ClientID</label>
+    <input id="inpClientId" type="text" autocomplete="off">
+  </div>
+  <div class="field">
+    <label>Phone</label>
+    <input id="inpPhone" type="text" inputmode="tel" autocomplete="off" placeholder="(###) ###-####">
+  </div>
+  <div class="field">
+    <label>Email</label>
+    <input id="inpEmail" type="email" autocomplete="off">
+  </div>
+  <div class="field">
+    <label>FormID</label>
+    <input id="inpFormId" type="text" autocomplete="off">
+  </div>
+</div>
+
+<!-- Actions -->
+<div style="display:flex; gap:.5rem; margin:.75rem 0 1.25rem; flex-wrap: wrap;">
+  <button onclick="UI_PantryClient.search()">Search</button>
+  <button class="secondary" onclick="UI_PantryClient.reset()">Start Over</button>
+  <button class="secondary" onclick="APP.nav.to('hub')">Return to Hub</button>
+</div>
+
+<!-- Results mount -->
+<div id="result"></div>
+
+<!-- Page script -->
+<?!= include('ui_pantry_client'); ?>

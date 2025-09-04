@@ -1,12 +1,17 @@
 <script>
 const APP = {
   nav: {
-    to: function(view) {
-      window.location.search = '?view=' + encodeURIComponent(view);
+    to(view) {
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.set('view', view);
+        window.location.href = u.toString();
+      } catch (e) {
+        // Fallback for older browsers
+        window.location.href = window.location.pathname + '?view=' + encodeURIComponent(view);
+      }
     }
   },
-  toast: function(msg) {
-    alert(msg); // placeholder
-  }
+  toast(msg) { alert(msg); } // placeholder
 };
 </script>
