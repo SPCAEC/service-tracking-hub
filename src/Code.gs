@@ -10,9 +10,19 @@ function serveView(view) {
     // Render the requested view to raw HTML (as a fragment)
     var pageTpl = HtmlService.createTemplateFromFile(view);
     var pageHtml = String(pageTpl.evaluate().getContent() || '');
+    var len = pageHtml.length;
 
-    if (!pageHtml.trim()) {
-      // Guard: never render a blank page — show a helpful message instead
+    // Build a small debug banner (remove after we fix things)
+    var debug =
+      '<div style="position:sticky;top:0;z-index:9999;' +
+      'background:#fef3c7;border-bottom:1px solid #f59e0b;padding:8px 12px;' +
+      'font:12px/1.4 ui-monospace,monospace;color:#92400e;">' +
+      'DEBUG: view="<b>' + esc(view) + '</b>", contentLength=' + len +
+      (len ? '' : ' — (empty fragment)') +
+      '</div>';
+
+    if (!len) {
+      // Safety fallback: show why it's empty
       pageHtml =
         '<div style="padding:16px;background:#fee2e2;border:1px solid #ef4444;border-radius:8px;">' +
         'View "<b>' + esc(view) + '</b>" evaluated to empty content. ' +
@@ -22,11 +32,10 @@ function serveView(view) {
 
     // Wrap inside the shared shell template
     var shellTpl = HtmlService.createTemplateFromFile('shared_shell');
-    shellTpl.content = pageHtml;
+    shellTpl.content = debug + pageHtml; // inject debug + page
     return shellTpl.evaluate().setTitle('Service Tracking Hub');
 
   } catch (err) {
-    // If the view file doesn't exist or another error occurs, show it in-page
     var msg =
       '<pre style="white-space:pre-wrap;font-family:ui-monospace,monospace;' +
       'background:#fef3c7;border:1px solid #f59e0b;padding:12px;border-radius:8px;">' +
