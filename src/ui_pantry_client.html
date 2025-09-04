@@ -1,186 +1,263 @@
 <script>
-const UI_PantryClient = {
-  state: { client:null, candidate:null, mode:'view' /* view|edit|create */ },
+/**
+ * Client page controller
+ * Calls server:
+ *  - searchClient({clientId, phone, email})
+ *  - searchByFormId(formId)
+ *  - createClient(data)
+ */
+(function(){
+  const $ = (id) => document.getElementById(id);
 
-  el(id){ return document.getElementById(id); },
+  // Wire buttons (so we don't rely on inline handlers)
+  document.addEventListener('DOMContentLoaded', () => {
+    $('btnSearch')?.addEventListener('click', search);
+    $('btnReset')?.addEventListener('click', reset);
+  });
 
-  reset(){
-    ['inpClientId','inpPhone','inpEmail','inpFormId'].forEach(id=> this.el(id).value='');
-    this.el('result').innerHTML='';
-    this.state = { client:null, candidate:null, mode:'view' };
-  },
+  function reset(){
+    ['inpClientId','inpPhone','inpEmail','inpFormId'].forEach(id => $(id).value = '');
+    $('result').innerHTML = '';
+  }
 
-  search(){
+  function search(){
     const q = {
-      clientId: this.el('inpClientId').value.trim(),
-      phone: this.el('inpPhone').value.trim(),
-      email: this.el('inpEmail').value.trim()
+      clientId: $('inpClientId').value.trim(),
+      phone: $('inpPhone').value.trim(),
+      email: $('inpEmail').value.trim()
     };
-    const formId = this.el('inpFormId').value.trim();
-    if(formId){
-      API.searchByFormId(formId, res => this.render(res));
-    }else{
-      API.searchClient(q, res => this.render(res));
+    const formId = $('inpFormId').value.trim();
+
+    if (formId) {
+      google.script.run.withSuccessHandler(render).searchByFormId(formId);
+    } else {
+      google.script.run.withSuccessHandler(render).searchClient(q);
     }
-  },
+  }
 
-  render(res){
-    const R = this.el('result');
-    if(!res){ R.textContent='No response'; return; }
+  function render(res){
+    const R = $('result');
+    if (!res) { R.textContent = 'No response.'; return; }
 
-    if(res.status==='exact'){
-      this.state.client = res.client;
-      R.innerHTML = this.cardClient(res.client, {title:'Client Found', actions:true});
+    // exact match (existing client)
+    if (res.status === 'exact' && res.client) {
+      R.innerHTML = cardExisting(res.client, { title: 'Client Found' });
       return;
     }
 
-    if(res.status==='possible_duplicate'){
-      this.state.client = res.client;
-      this.state.candidate = res.candidateFromForm || null;
-      R.innerHTML = `
-        <div class="card">
-          <h3 style="margin-top:0;">Possible duplicate (${res.matchReasons.join('+')})</h3>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-            <div>
-              <h4>Existing Client</h4>
-              ${this.clientFields(res.client, true)}
-            </div>
-            <div>
-              <h4>From Form</h4>
-              ${this.clientFields(res.candidateFromForm || {}, true)}
-            </div>
-          </div>
-          <div style="margin-top:1rem;display:flex;gap:.5rem;">
-            <button onclick="UI_PantryClient.edit()">Edit/Merge</button>
-            <button onclick="UI_PantryClient.continue()">Continue</button>
-          </div>
-        </div>`;
+    // possible duplicate (form vs existing)
+    if (res.status === 'possible_duplicate') {
+      R.innerHTML = cardPossibleDup(res);
       return;
     }
 
-    if(res.status==='new_from_form'){
-      this.state.candidate = res.candidateFromForm || {};
-      R.innerHTML = `
-        <div class="card">
-          <h3 style="margin-top:0;">New Client (from Form)</h3>
-          ${this.clientEditForm(this.state.candidate)}
-          <div style="margin-top:.75rem;">
-            <button onclick="UI_PantryClient.saveNew()">Create Client</button>
-          </div>
-        </div>`;
+    // new-from-form (prefilled) OR generic not-found
+    if (res.status === 'new_from_form') {
+      R.innerHTML = cardCreate(res.candidateFromForm || {});
       return;
     }
 
-    if(res.status==='not_found' || res.status==='form_not_found'){
-      R.innerHTML = `
-        <div class="card">
-          <h3 style="margin-top:0;">No match found</h3>
-          ${this.clientEditForm({})}
-          <div style="margin-top:.75rem;">
-            <button onclick="UI_PantryClient.saveNew()">Create Client</button>
-          </div>
-        </div>`;
+    if (res.status === 'not_found' || res.status === 'form_not_found') {
+      R.innerHTML = cardCreate({});
       return;
     }
 
-    R.textContent = JSON.stringify(res);
-  },
+    // fallback
+    R.textContent = JSON.stringify(res, null, 2);
+  }
 
-  cardClient(client, opts){
+  // --- Cards / Forms ---
+
+  function cardExisting(c, opts){
     return `
       <div class="card">
-        <h3 style="margin-top:0;">${opts?.title||'Client'}</h3>
-        ${this.clientFields(client, true)}
-        ${opts?.actions?`
-          <div style="margin-top:.75rem;display:flex;gap:.5rem;">
-            <button onclick="UI_PantryClient.edit()">Edit</button>
-            <button onclick="UI_PantryClient.continue()">Continue</button>
-          </div>`:''}
-      </div>`;
-  },
-
-  clientFields(c, readonly){
-    const val = k => (c && c[k]) ? String(c[k]) : '';
-    const fields = ['ClientID','FirstName','LastName','Address1','Address2','City','State','ZIP',
-      'PhoneNormalized','EmailNormalized','PreferredContact','ConsentEmail','ConsentSMS','Returning Client'];
-    return `
-      <table style="width:100%;border-collapse:collapse;">
-        <tbody>
-          ${fields.map(k=>`
-          <tr>
-            <td style="padding:.25rem .5rem;color:#475569;width:220px;">${k}</td>
-            <td style="padding:.25rem .5rem;">${readonly? this.escape(val(k)) : `<input name="${k}" value="${this.escape(val(k))}" />`}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>`;
-  },
-
-  clientEditForm(seed){
-    const c = Object.assign({
-      ClientID:'', FirstName:'', LastName:'', Address1:'', Address2:'', City:'', State:'', ZIP:'',
-      PhoneNormalized:'', EmailNormalized:'', PreferredContact:'', ConsentEmail:'', ConsentSMS:'', 'Returning Client':''
-    }, seed||{});
-    const req = (name)=> (name==='FirstName' || name==='LastName') ? ' *' : '';
-    const inputs = Object.keys(c).map(k=>{
-      const required = (k==='FirstName'||k==='LastName') ? 'required' : '';
-      return `
-        <div class="field">
-          <label>${k}${req(k)}</label>
-          <input name="${k}" value="${this.escape(c[k]||'')}" ${required}>
-        </div>`;
-    }).join('');
-    return `<form id="formClient" onsubmit="return false;"><div class="grid">${inputs}</div></form>`;
-  },
-
-  edit(){
-    if(!this.state.client) return;
-    const R = this.el('result');
-    R.innerHTML = `
-      <div class="card">
-        <h3 style="margin-top:0;">Edit Client</h3>
-        ${this.clientEditForm(this.state.client)}
-        <div style="margin-top:.75rem;display:flex;gap:.5rem;">
-          <button onclick="UI_PantryClient.saveEdit()">Save</button>
-          <button class="secondary" onclick="UI_PantryClient.reset()">Cancel</button>
+        <h3 style="margin:0 0 .5rem;">${opts?.title || 'Client'}</h3>
+        ${tableFields(c)}
+        <div style="margin-top:.75rem; display:flex; gap:.5rem; flex-wrap: wrap;">
+          <button onclick="UI_PC.editExisting()">Edit</button>
+          <button onclick="UI_PC.continue()">Continue</button>
         </div>
-      </div>`;
-  },
+      </div>
+    `;
+  }
 
-  saveEdit(){
-    const data = this.serialize('formClient');
-    API.createClient(data, res=>{
-      APP.toast('Client updated');
-      this.reset();
-    });
-  },
+  function cardPossibleDup(res){
+    const left  = res.client || {};
+    const right = res.candidateFromForm || {};
+    const reasons = Array.isArray(res.matchReasons) ? res.matchReasons.join(' + ') : '';
+    return `
+      <div class="card">
+        <h3 style="margin:0 0 .5rem;">Possible duplicate (${reasons})</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div><h4 style="margin:.25rem 0;">Existing</h4>${tableFields(left)}</div>
+          <div><h4 style="margin:.25rem 0;">From Form</h4>${tableFields(right)}</div>
+        </div>
+        <div style="margin-top:.75rem; display:flex; gap:.5rem; flex-wrap: wrap;">
+          <button onclick="UI_PC.useExisting()">Use Existing</button>
+          <button onclick="UI_PC.merge()">Merge & Save</button>
+          <button class="secondary" onclick="UI_PC.createFromForm()">Create Separate Client</button>
+        </div>
+      </div>
+    `;
+  }
 
-  saveNew(){
-    const data = this.serialize('formClient');
-    if(!data.FirstName || !data.LastName){
-      APP.toast('First and Last Name are required.');
-      return;
+  function cardCreate(seed){
+    // Minimal create form; First/Last required
+    const fields = [
+      'ClientID','FirstName','LastName','Address1','Address2','City','State','ZIP',
+      'Phone','PhoneNormalized','Email','EmailNormalized',
+      'PreferredContact','ConsentEmail','ConsentSMS','Returning Client',
+      'FirstSeenAt','FirstSeenSource',
+      'How did you hear about us?','Language','Military Status','Employment','Ethnic Background',
+      'Transportation','Gender Identity','Public Services','Income','Income Contribution',
+      'Household Size','Housing Status'
+    ];
+    const init = {};
+    fields.forEach(k => init[k] = seed[k] || '');
+
+    return `
+      <div class="card">
+        <h3 style="margin:0 0 .5rem;">Create New Client</h3>
+        <form id="formClient" onsubmit="return false;">
+          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+            ${fields.map(k => {
+              const required = (k === 'FirstName' || k === 'LastName') ? 'required' : '';
+              const val = escape(init[k]);
+              return `
+                <div class="field">
+                  <label>${k}${required ? ' *' : ''}</label>
+                  <input name="${k}" value="${val}" ${required}>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </form>
+        <div style="margin-top:.75rem;">
+          <button onclick="UI_PC.saveNew()">Create Client</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function tableFields(c){
+    const fields = [
+      'ClientID','FirstName','LastName','Address1','Address2','City','State','ZIP',
+      'Phone','PhoneNormalized','Email','EmailNormalized',
+      'PreferredContact','ConsentEmail','ConsentSMS','Returning Client',
+      'FirstSeenAt','FirstSeenSource',
+      'How did you hear about us?','Language','Military Status','Employment','Ethnic Background',
+      'Transportation','Gender Identity','Public Services','Income','Income Contribution',
+      'Household Size','Housing Status'
+    ];
+    const val = k => c && c[k] != null ? String(c[k]) : '';
+    return `
+      <table style="width:100%; border-collapse:collapse;">
+        <tbody>
+          ${fields.map(k => `
+            <tr>
+              <td style="padding:.25rem .5rem; color:#475569; width:240px;">${k}</td>
+              <td style="padding:.25rem .5rem;">${escape(val(k))}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  // --- Actions exposed for buttons ---
+  window.UI_PC = {
+    editExisting(){
+      const R = $('result');
+      // Read-only table -> simple edit form; for brevity, ask to re-run search after save
+      const read = R.querySelector('table');
+      if(!read){ APP.toast('Nothing to edit.'); return; }
+      const data = tableToObject(read);
+      R.innerHTML = cardCreate(data).replace('Create New Client','Edit Client')
+        + `<div style="margin-top:.5rem;"><button onclick="UI_PC.saveEdit()">Save</button></div>`;
+    },
+    saveEdit(){
+      const data = formToObject('formClient');
+      normalizeClient(data);
+      google.script.run.withSuccessHandler(() => {
+        APP.toast('Client updated.');
+        reset();
+      }).createClient(data);
+    },
+    saveNew(){
+      const data = formToObject('formClient');
+      if(!data.FirstName || !data.LastName){
+        APP.toast('First and Last Name are required.');
+        return;
+      }
+      normalizeClient(data);
+      google.script.run.withSuccessHandler(() => {
+        APP.toast('Client created.');
+        reset();
+      }).createClient(data);
+    },
+    continue(){
+      // TODO: route to pets, but for now just toast
+      APP.toast('Continue to Pets (coming next)…');
+      // APP.nav.to('pantry_pets');
+    },
+    useExisting(){
+      APP.toast('Using existing client. Continue to Pets…');
+    },
+    merge(){
+      // Ask server to merge “existing” and “candidateFromForm”
+      const R = $('result');
+      const blocks = R.querySelectorAll('table');
+      if (blocks.length < 2) { APP.toast('No merge candidates.'); return; }
+      const existing = tableToObject(blocks[0]);
+      const fromForm = tableToObject(blocks[1]);
+      google.script.run.withSuccessHandler((merged) => {
+        google.script.run.withSuccessHandler(() => {
+          APP.toast('Merged & saved.');
+          reset();
+        }).createClient(merged);
+      }).mergeClient(existing, fromForm);
+    },
+    createFromForm(){
+      const R = $('result');
+      const blocks = R.querySelectorAll('table');
+      if (blocks.length < 2) { APP.toast('No form candidate.'); return; }
+      const fromForm = tableToObject(blocks[1]);
+      normalizeClient(fromForm);
+      google.script.run.withSuccessHandler(() => {
+        APP.toast('Client created from form.');
+        reset();
+      }).createClient(fromForm);
     }
-    API.createClient(data, res=>{
-      APP.toast('Client created');
-      this.reset();
-    });
-  },
+  };
 
-  continue(){
-    // TODO: if pets exist → allow skip; else force pets screen
-    APP.toast('Continue to Pets (stub)');
-    // APP.nav.to('pantry_pets');
-  },
+  // --- Helpers ---
+  function formToObject(formId){
+    const o = {};
+    document.querySelectorAll(`#${formId} input`).forEach(i => o[i.name] = i.value || '');
+    return o;
+  }
 
-  serialize(formId){
-    const form = document.getElementById(formId);
-    const o={};
-    Array.from(form.querySelectorAll('input')).forEach(inp=>{
-      o[inp.name] = inp.value || '';
+  function tableToObject(tbl){
+    const o = {};
+    tbl.querySelectorAll('tr').forEach(tr => {
+      const tds = tr.querySelectorAll('td');
+      if (tds.length >= 2) {
+        const key = tds[0].textContent.trim();
+        const val = tds[1].textContent;
+        o[key] = val;
+      }
     });
     return o;
-  },
+  }
 
-  escape(s){ return String(s||'').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
-};
+  function normalizeClient(o){
+    if (o.Email && !o.EmailNormalized) o.EmailNormalized = o.Email.toLowerCase();
+    if (o.Phone && !o.PhoneNormalized) {
+      const digits = String(o.Phone).replace(/\D/g,'');
+      o.PhoneNormalized = digits.length >= 10 ? digits.slice(-10) : digits;
+    }
+  }
+
+  function escape(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+})();
 </script>
