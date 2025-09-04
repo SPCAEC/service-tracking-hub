@@ -1,6 +1,7 @@
 <h2>Record Food Pantry Services</h2>
-  <p>Search for an existing client by ClientID, Phone Number, Email Address, or FormID.</p>
-  
+<p>Search for an existing client by ClientID, Phone Number, Email Address, or FormID.</p>
+
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
   <div class="field">
     <label>ClientID</label>
     <input id="inpClientId" type="text">
@@ -17,7 +18,14 @@
     <label>FormID</label>
     <input id="inpFormId" type="text">
   </div>
+</div>
 
+<div style="display:flex; gap:.5rem; margin:.5rem 0 1rem;">
   <button onclick="UI_PantryClient.search()">Search</button>
+  <button class="secondary" onclick="UI_PantryClient.reset()">Start Over</button>
+  <button class="secondary" onclick="APP.nav.to('hub')">Return to Hub</button>
+</div>
 
-  <div id="result"></div>
+<div id="result"></div>
+
+<?!= include('ui_pantry_client'); ?>
