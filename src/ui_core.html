@@ -2,17 +2,16 @@
 const APP = {
   nav: {
     to(view) {
-      // Minimal + robust: just set the querystring.
+      // Navigate the TOP window (not the iframe)
       try {
-        console.log('[APP.nav.to] navigating to view =', view);
-        window.location.search = '?view=' + encodeURIComponent(view);
+        const base = window.top.location.href.split('?')[0];
+        window.top.location.href = base + '?view=' + encodeURIComponent(view);
       } catch (e) {
-        // Absolute fallback if something odd happens
-        var base = window.location.href.split('?')[0];
-        window.location.href = base + '?view=' + encodeURIComponent(view);
+        // Last-resort fallback
+        window.location.search = '?view=' + encodeURIComponent(view);
       }
     }
   },
-  toast(msg) { alert(msg); } // placeholder
+  toast(msg){ alert(msg); }
 };
 </script>
