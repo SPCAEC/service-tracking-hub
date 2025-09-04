@@ -2,13 +2,14 @@
 const APP = {
   nav: {
     to(view) {
+      // Minimal + robust: just set the querystring.
       try {
-        const u = new URL(window.location.href);
-        u.searchParams.set('view', view);
-        window.location.href = u.toString();
+        console.log('[APP.nav.to] navigating to view =', view);
+        window.location.search = '?view=' + encodeURIComponent(view);
       } catch (e) {
-        // Fallback for older browsers
-        window.location.href = window.location.pathname + '?view=' + encodeURIComponent(view);
+        // Absolute fallback if something odd happens
+        var base = window.location.href.split('?')[0];
+        window.location.href = base + '?view=' + encodeURIComponent(view);
       }
     }
   },
