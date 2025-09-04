@@ -2,13 +2,14 @@
 const APP = {
   nav: {
     to(view) {
-      // Navigate the TOP window (not the iframe)
+      const base = (typeof window.BASE_EXEC_URL === 'string' && window.BASE_EXEC_URL) 
+        ? window.BASE_EXEC_URL 
+        : window.top.location.href.split('?')[0]; // fallback
+      const url = base + '?view=' + encodeURIComponent(view);
       try {
-        const base = window.top.location.href.split('?')[0];
-        window.top.location.href = base + '?view=' + encodeURIComponent(view);
+        window.top.location.href = url;   // break out of editor preview if framed
       } catch (e) {
-        // Last-resort fallback
-        window.location.search = '?view=' + encodeURIComponent(view);
+        window.location.href = url;
       }
     }
   },
