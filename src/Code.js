@@ -3,17 +3,19 @@ function doGet(e) {
   return serveView(view);
 }
 
-function serveView(view) {
-  // Grab the inner content of the requested view
-  var page = HtmlService.createTemplateFromFile(view);
-  var content = page.evaluate().getContent();
-
-  // Inject into the shared shell
-  var shell = HtmlService.createTemplateFromFile('shared_shell');
+function serveView(view){
+  const page = HtmlService.createTemplateFromFile(view);
+  const content = page.evaluate().getContent();
+  const shell = HtmlService.createTemplateFromFile('shared_shell');
   shell.content = content;
-
   return shell.evaluate().setTitle('Service Tracking Hub');
 }
+function include(name){ return HtmlService.createHtmlOutputFromFile(name).getContent(); }
+
+// API (exposed to UI)
+function searchClient(query){ return api_searchClient(query||{}); }
+function searchByFormId(formId){ return api_searchByFormId(formId); }
+function createClient(data){ return clients_upsert(data||{}); } // simple for now
 
 // Helper: include HTML partials
 function include(filename) {

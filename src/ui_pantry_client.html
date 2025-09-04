@@ -1,25 +1,186 @@
 <script>
 const UI_PantryClient = {
-  search: function() {
-    const query = {
-      clientId: document.getElementById('inpClientId').value.trim(),
-      phone: document.getElementById('inpPhone').value.trim(),
-      email: document.getElementById('inpEmail').value.trim(),
-      formId: document.getElementById('inpFormId').value.trim()
+  state: { client:null, candidate:null, mode:'view' /* view|edit|create */ },
+
+  el(id){ return document.getElementById(id); },
+
+  reset(){
+    ['inpClientId','inpPhone','inpEmail','inpFormId'].forEach(id=> this.el(id).value='');
+    this.el('result').innerHTML='';
+    this.state = { client:null, candidate:null, mode:'view' };
+  },
+
+  search(){
+    const q = {
+      clientId: this.el('inpClientId').value.trim(),
+      phone: this.el('inpPhone').value.trim(),
+      email: this.el('inpEmail').value.trim()
     };
-    if (query.formId) {
-      API.searchByFormId(query.formId, UI_PantryClient.renderResult);
-    } else {
-      API.searchClient(query, UI_PantryClient.renderResult);
+    const formId = this.el('inpFormId').value.trim();
+    if(formId){
+      API.searchByFormId(formId, res => this.render(res));
+    }else{
+      API.searchClient(q, res => this.render(res));
     }
   },
-  renderResult: function(res) {
-    const el = document.getElementById('result');
-    if (res && res.found) {
-      el.innerHTML = `<div>Client found: ${JSON.stringify(res.client)}</div>`;
-    } else {
-      el.innerHTML = `<div>No match found. Show "Create Client" form here.</div>`;
+
+  render(res){
+    const R = this.el('result');
+    if(!res){ R.textContent='No response'; return; }
+
+    if(res.status==='exact'){
+      this.state.client = res.client;
+      R.innerHTML = this.cardClient(res.client, {title:'Client Found', actions:true});
+      return;
     }
-  }
+
+    if(res.status==='possible_duplicate'){
+      this.state.client = res.client;
+      this.state.candidate = res.candidateFromForm || null;
+      R.innerHTML = `
+        <div class="card">
+          <h3 style="margin-top:0;">Possible duplicate (${res.matchReasons.join('+')})</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+            <div>
+              <h4>Existing Client</h4>
+              ${this.clientFields(res.client, true)}
+            </div>
+            <div>
+              <h4>From Form</h4>
+              ${this.clientFields(res.candidateFromForm || {}, true)}
+            </div>
+          </div>
+          <div style="margin-top:1rem;display:flex;gap:.5rem;">
+            <button onclick="UI_PantryClient.edit()">Edit/Merge</button>
+            <button onclick="UI_PantryClient.continue()">Continue</button>
+          </div>
+        </div>`;
+      return;
+    }
+
+    if(res.status==='new_from_form'){
+      this.state.candidate = res.candidateFromForm || {};
+      R.innerHTML = `
+        <div class="card">
+          <h3 style="margin-top:0;">New Client (from Form)</h3>
+          ${this.clientEditForm(this.state.candidate)}
+          <div style="margin-top:.75rem;">
+            <button onclick="UI_PantryClient.saveNew()">Create Client</button>
+          </div>
+        </div>`;
+      return;
+    }
+
+    if(res.status==='not_found' || res.status==='form_not_found'){
+      R.innerHTML = `
+        <div class="card">
+          <h3 style="margin-top:0;">No match found</h3>
+          ${this.clientEditForm({})}
+          <div style="margin-top:.75rem;">
+            <button onclick="UI_PantryClient.saveNew()">Create Client</button>
+          </div>
+        </div>`;
+      return;
+    }
+
+    R.textContent = JSON.stringify(res);
+  },
+
+  cardClient(client, opts){
+    return `
+      <div class="card">
+        <h3 style="margin-top:0;">${opts?.title||'Client'}</h3>
+        ${this.clientFields(client, true)}
+        ${opts?.actions?`
+          <div style="margin-top:.75rem;display:flex;gap:.5rem;">
+            <button onclick="UI_PantryClient.edit()">Edit</button>
+            <button onclick="UI_PantryClient.continue()">Continue</button>
+          </div>`:''}
+      </div>`;
+  },
+
+  clientFields(c, readonly){
+    const val = k => (c && c[k]) ? String(c[k]) : '';
+    const fields = ['ClientID','FirstName','LastName','Address1','Address2','City','State','ZIP',
+      'PhoneNormalized','EmailNormalized','PreferredContact','ConsentEmail','ConsentSMS','Returning Client'];
+    return `
+      <table style="width:100%;border-collapse:collapse;">
+        <tbody>
+          ${fields.map(k=>`
+          <tr>
+            <td style="padding:.25rem .5rem;color:#475569;width:220px;">${k}</td>
+            <td style="padding:.25rem .5rem;">${readonly? this.escape(val(k)) : `<input name="${k}" value="${this.escape(val(k))}" />`}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  },
+
+  clientEditForm(seed){
+    const c = Object.assign({
+      ClientID:'', FirstName:'', LastName:'', Address1:'', Address2:'', City:'', State:'', ZIP:'',
+      PhoneNormalized:'', EmailNormalized:'', PreferredContact:'', ConsentEmail:'', ConsentSMS:'', 'Returning Client':''
+    }, seed||{});
+    const req = (name)=> (name==='FirstName' || name==='LastName') ? ' *' : '';
+    const inputs = Object.keys(c).map(k=>{
+      const required = (k==='FirstName'||k==='LastName') ? 'required' : '';
+      return `
+        <div class="field">
+          <label>${k}${req(k)}</label>
+          <input name="${k}" value="${this.escape(c[k]||'')}" ${required}>
+        </div>`;
+    }).join('');
+    return `<form id="formClient" onsubmit="return false;"><div class="grid">${inputs}</div></form>`;
+  },
+
+  edit(){
+    if(!this.state.client) return;
+    const R = this.el('result');
+    R.innerHTML = `
+      <div class="card">
+        <h3 style="margin-top:0;">Edit Client</h3>
+        ${this.clientEditForm(this.state.client)}
+        <div style="margin-top:.75rem;display:flex;gap:.5rem;">
+          <button onclick="UI_PantryClient.saveEdit()">Save</button>
+          <button class="secondary" onclick="UI_PantryClient.reset()">Cancel</button>
+        </div>
+      </div>`;
+  },
+
+  saveEdit(){
+    const data = this.serialize('formClient');
+    API.createClient(data, res=>{
+      APP.toast('Client updated');
+      this.reset();
+    });
+  },
+
+  saveNew(){
+    const data = this.serialize('formClient');
+    if(!data.FirstName || !data.LastName){
+      APP.toast('First and Last Name are required.');
+      return;
+    }
+    API.createClient(data, res=>{
+      APP.toast('Client created');
+      this.reset();
+    });
+  },
+
+  continue(){
+    // TODO: if pets exist → allow skip; else force pets screen
+    APP.toast('Continue to Pets (stub)');
+    // APP.nav.to('pantry_pets');
+  },
+
+  serialize(formId){
+    const form = document.getElementById(formId);
+    const o={};
+    Array.from(form.querySelectorAll('input')).forEach(inp=>{
+      o[inp.name] = inp.value || '';
+    });
+    return o;
+  },
+
+  escape(s){ return String(s||'').replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 };
 </script>
