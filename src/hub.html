@@ -1,20 +1,10 @@
-<? var base = ScriptApp.getService().getUrl(); ?>
-
 <h1>Service Tracking Hub</h1>
 
-<p style="font: 12px/1.4 ui-monospace, monospace; color:#475569;">
-  <b>Deployed base:</b> <?= base ?><br>
-  <b>At runtime, window.location.href =</b>
-  <span id="dbg-href"></span>
-</p>
-
 <div class="grid">
-  <!-- Absolute link (bypass any relative/iframe quirks) -->
-  <a class="tile" id="link-pantry" href="<?= base ?>?view=pantry_client" role="button">
+  <a class="tile" href="?view=pantry_client" target="_top" role="button">
     Record Food Pantry Services
   </a>
 
-  <a class="tile" href="<?= base ?>?view=test_view" role="button">Test View</a>
   <div class="tile">Update or Create Client/Pet</div>
   <div class="tile">Input Medical Expenses</div>
   <div class="tile">Document Client Interaction</div>
@@ -23,8 +13,3 @@
   <div class="tile">Reports and Analytics</div>
   <div class="tile">Admin Dashboard</div>
 </div>
-
-<script>
-  // Show the actual runtime URL for quick sanity check
-  document.getElementById('dbg-href').textContent = window.location.href;
-</script>
