@@ -1,6 +1,7 @@
-/** Service Tracking Hub — Router + API (Code.gs, HUB-names) 
+/** Service Tracking Hub — Router + API (Code.gs, HUB-names, v2) 
  *  Exports uniquely named API functions to avoid collisions:
  *    hub_ping, hub_searchClient, hub_searchByFormId, hub_createClient, hub_mergeClient
+ *  hub_searchClient now wraps api_searchClient and ALWAYS returns a visible object.
  */
 
 /** Entry */
@@ -74,20 +75,22 @@ function hub_ping() {
   };
 }
 
-/** LIVE: call real api_searchClient (wrapped + never-null) */
+/** LIVE: call real api_searchClient; ALWAYS return a visible object */
 function hub_searchClient(query) {
   var q = query || {};
   try {
-    console.log('>>> hub_searchClient called with', JSON.stringify(q));
+    console.log('>>> hub_searchClient input', JSON.stringify(q));
     var out = api_searchClient(q);
+    console.log('>>> hub_searchClient output', JSON.stringify(out));
 
-    // normalize result into an object
-    var res = (out && typeof out === 'object') ? out : { status: 'empty', raw: out };
-    res._marker = 'hub_searchClient_v1';
-    res._diag   = { received: q, at: new Date().toISOString() };
-
-    console.log('>>> hub_searchClient returning', JSON.stringify(res));
-    return res;
+    return {
+      _marker: 'hub_searchClient_v2',
+      received: q,
+      result: out,
+      status: (out && typeof out === 'object' && out.status) ? out.status
+            : (out == null ? 'null_result' : 'no_status'),
+      at: new Date().toISOString()
+    };
 
   } catch (e) {
     console.error('>>> hub_searchClient error', e);
@@ -96,8 +99,9 @@ function hub_searchClient(query) {
       where: 'hub_searchClient',
       message: String(e),
       stack: (e && e.stack) ? String(e.stack) : '',
-      _marker: 'hub_searchClient_err_v1',
-      _diag: { received: q, at: new Date().toISOString() }
+      _marker: 'hub_searchClient_err_v2',
+      received: q,
+      at: new Date().toISOString()
     };
   }
 }
