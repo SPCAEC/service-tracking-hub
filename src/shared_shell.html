@@ -5,6 +5,13 @@
   <meta charset="UTF-8">
   <title>Service Tracking Hub</title>
   <?!= include('shared_css'); ?>
+
+  <!-- Load core JS before any view-specific fragment -->
+  <?!= include('ui_core'); ?>
+  <?!= include('ui_api'); ?>
+
+  <!-- Make exec URL available globally -->
+  <script>window.BASE_EXEC_URL = '<?= BASE ?>';</script>
 </head>
 <body>
   <div id="app" class="app">
@@ -13,11 +20,5 @@
       <?!= content ?>
     </main>
   </div>
-
-  <!-- Make the exec URL available to client-side code -->
-  <script>window.BASE_EXEC_URL = '<?= BASE ?>';</script>
-
-  <?!= include('ui_core'); ?>
-  <?!= include('ui_api'); ?>
 </body>
 </html>

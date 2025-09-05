@@ -2,16 +2,21 @@
 const API = {
   _handleFailure(err) {
     console.error('[server error]', err);
-    try {
-      const el = document.getElementById('result');
-      if (el) {
-        el.innerHTML =
-          `<div class="card" style="border-color:#ef4444;">
-             <h3 style="margin:0 0 .5rem;">Server error</h3>
-             <pre style="white-space:pre-wrap;">${(err && err.message) ? err.message : String(err)}</pre>
-           </div>`;
-      }
-    } catch(_) {}
+    const el = document.getElementById('result');
+    if (el) {
+      el.innerHTML =
+        `<div class="card" style="border-color:#ef4444;">
+           <h3 style="margin:0 0 .5rem;">Server error</h3>
+           <pre style="white-space:pre-wrap;">${(err && err.message) ? err.message : String(err)}</pre>
+         </div>`;
+    }
+  },
+
+  ping(onSuccess, onError) {
+    google.script.run
+      .withSuccessHandler(onSuccess)
+      .withFailureHandler(onError || API._handleFailure)
+      .ping();
   },
 
   searchClient(query, onSuccess, onError) {
