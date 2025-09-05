@@ -60,18 +60,25 @@
     }
   }
 
-  function render(res) {
-    const R = $('result');
+    function render(res){
+    const R = document.getElementById('result');
     if (!R) return;
 
-    // 🔎 Diagnostics first
+    // If server wrapped payload as JSON, parse it
+    let parsed = res;
+    if (res && typeof res === 'object' && typeof res.resultJson === 'string') {
+      try {
+        parsed = JSON.parse(res.resultJson);
+      } catch (e) {
+        parsed = { status: 'error', where: 'client_parse', message: String(e) };
+      }
+    }
+
+    // 🔎 Diagnostics (shows both the wrapper and parsed)
     const diag = {
       receivedAt: new Date().toISOString(),
-      typeof: typeof res,
-      isNull: res === null,
-      isUndefined: typeof res === 'undefined',
-      keys: res && typeof res === 'object' ? Object.keys(res) : [],
-      value: res,
+      wrapper: res,
+      parsed: parsed
     };
     R.innerHTML = `
       <div class="card" style="border-color:#94a3b8;">
@@ -80,39 +87,41 @@
       </div>
     `;
 
-    if (res == null) return;
+    // If parse failed or we have no object, stop after showing diagnostics
+    if (!parsed || typeof parsed !== 'object') return;
 
-    if (res.status === 'error') {
+    // ----- Normal flow uses the PARSED object from here -----
+    if (parsed.status === 'error') {
       R.innerHTML += `
         <div class="card" style="border-color:#ef4444;">
-          <h3 style="margin:0 0 .5rem;">Server error ${res.where ? '(' + res.where + ')' : ''}</h3>
-          <pre style="white-space:pre-wrap;">${escape(res.message || '')}</pre>
+          <h3 style="margin:0 0 .5rem;">Server error ${parsed.where ? '('+parsed.where+')' : ''}</h3>
+          <pre style="white-space:pre-wrap;">${escape(parsed.message || '')}</pre>
         </div>`;
       return;
     }
 
-    if (res.status === 'exact' && res.client) {
-      R.innerHTML += cardExisting(res.client, { title: 'Client Found' });
+    if (parsed.status === 'exact' && parsed.client) {
+      R.innerHTML += cardExisting(parsed.client, { title: 'Client Found' });
       return;
     }
 
-    if (res.status === 'possible_duplicate') {
-      R.innerHTML += cardPossibleDup(res);
+    if (parsed.status === 'possible_duplicate') {
+      R.innerHTML += cardPossibleDup(parsed);
       return;
     }
 
-    if (res.status === 'new_from_form') {
-      R.innerHTML += cardCreate(res.candidateFromForm || {});
+    if (parsed.status === 'new_from_form') {
+      R.innerHTML += cardCreate(parsed.candidateFromForm || {});
       return;
     }
 
-    if (res.status === 'not_found' || res.status === 'form_not_found') {
+    if (parsed.status === 'not_found' || parsed.status === 'form_not_found') {
       R.innerHTML += cardCreate({});
       return;
     }
 
-    // fallback
-    R.innerHTML += `<pre>${escape(JSON.stringify(res, null, 2))}</pre>`;
+    // Fallback
+    R.innerHTML += `<pre>${escape(JSON.stringify(parsed, null, 2))}</pre>`;
   }
 
   // ---------- UI builders ----------
