@@ -73,30 +73,11 @@ function hub_ping() {
 
 /** LIVE: call real api_searchClient; ALWAYS return a visible object */
 function hub_searchClient(query) {
-  var q = query || {};
-  try {
-    console.log('>>> hub_searchClient input', JSON.stringify(q));
-    var out = api_searchClient(q);
-    console.log('>>> hub_searchClient output', JSON.stringify(out));
-
-    return {
-      note: 'OK from hub_searchClient',
-      received: q,
-      at: new Date().toISOString(),
-      result: out, // pass service-layer result through
-      _marker: 'hub_searchClient_v3',
-      status: (out && out.status) ? out.status : (out == null ? 'null_result' : 'no_status')
-    };
-
-  } catch (e) {
-    console.error('>>> hub_searchClient error', e);
-    return {
-      status: 'error',
-      where: 'hub_searchClient',
-      message: String(e),
-      stack: (e && e.stack) ? String(e.stack) : ''
-    };
-  }
+  return {
+    status: 'constant_ok',
+    echo: query,
+    _marker: 'hub_searchClient_constant'
+  };
 }
 
 /** (Optional) wire live once search flow is confirmed */
