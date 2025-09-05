@@ -1,13 +1,45 @@
 <script>
 const API = {
-  searchClient(query, cb) {
-    google.script.run.withSuccessHandler(cb).searchClient(query);
+  _handleFailure(err) {
+    console.error('[server error]', err);
+    try {
+      const el = document.getElementById('result');
+      if (el) {
+        el.innerHTML =
+          `<div class="card" style="border-color:#ef4444;">
+             <h3 style="margin:0 0 .5rem;">Server error</h3>
+             <pre style="white-space:pre-wrap;">${(err && err.message) ? err.message : String(err)}</pre>
+           </div>`;
+      }
+    } catch(_) {}
   },
-  searchByFormId(id, cb) {
-    google.script.run.withSuccessHandler(cb).searchByFormId(id);
+
+  searchClient(query, onSuccess, onError) {
+    google.script.run
+      .withSuccessHandler(onSuccess)
+      .withFailureHandler(onError || API._handleFailure)
+      .searchClient(query);
   },
-  createClient(data, cb) {
-    google.script.run.withSuccessHandler(cb).createClient(data);
+
+  searchByFormId(id, onSuccess, onError) {
+    google.script.run
+      .withSuccessHandler(onSuccess)
+      .withFailureHandler(onError || API._handleFailure)
+      .searchByFormId(id);
+  },
+
+  createClient(data, onSuccess, onError) {
+    google.script.run
+      .withSuccessHandler(onSuccess)
+      .withFailureHandler(onError || API._handleFailure)
+      .createClient(data);
+  },
+
+  mergeClient(existing, candidate, onSuccess, onError) {
+    google.script.run
+      .withSuccessHandler(onSuccess)
+      .withFailureHandler(onError || API._handleFailure)
+      .mergeClient(existing, candidate);
   }
 };
 </script>
