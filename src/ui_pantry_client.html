@@ -29,9 +29,29 @@
     const formId = $('inpFormId').value.trim();
 
     if (formId) {
-      google.script.run.withSuccessHandler(render).searchByFormId(formId);
+      google.script.run
+        .withSuccessHandler(render)
+        .withFailureHandler(err => {
+          console.error('[server error]', err);
+          document.getElementById('result').innerHTML =
+            `<div class="card" style="border-color:#ef4444;">
+              <h3 style="margin:0 0 .5rem;">Server error</h3>
+              <pre style="white-space:pre-wrap;">${(err && err.message) ? err.message : String(err)}</pre>
+            </div>`;
+        })
+        .searchByFormId(formId);
     } else {
-      google.script.run.withSuccessHandler(render).searchClient(q);
+      google.script.run
+        .withSuccessHandler(render)
+        .withFailureHandler(err => {
+          console.error('[server error]', err);
+          document.getElementById('result').innerHTML =
+            `<div class="card" style="border-color:#ef4444;">
+              <h3 style="margin:0 0 .5rem;">Server error</h3>
+              <pre style="white-space:pre-wrap;">${(err && err.message) ? err.message : String(err)}</pre>
+            </div>`;
+        })
+        .searchClient(q);
     }
   }
 
