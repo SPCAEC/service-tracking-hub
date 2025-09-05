@@ -1,6 +1,6 @@
-/** Service Tracking Hub — Router + API (Code.gs, DEBUG build)
- *  This version does NOT call any service-layer functions.
- *  Every API returns a clear debug object so the UI always gets a response.
+/** Service Tracking Hub — Router + API (Code.gs, PARTIAL live)
+ *  searchClient → calls real api_searchClient (with diagnostics)
+ *  searchByFormId / createClient / mergeClient → debug stubs for now
  */
 
 /** Entry */
@@ -12,12 +12,10 @@ function doGet(e) {
 /** HTML shell renderer */
 function serveView(view) {
   try {
-    // Render requested view fragment
     var tpl  = HtmlService.createTemplateFromFile(view);
     var frag = String(tpl.evaluate().getContent() || '');
     var len  = frag.length;
 
-    // Debug banner (remove when stable)
     var debug =
       '<div style="position:sticky;top:0;z-index:9999;' +
       'background:#fef3c7;border-bottom:1px solid #f59e0b;padding:8px 12px;' +
@@ -34,7 +32,6 @@ function serveView(view) {
         '</div>';
     }
 
-    // Wrap inside the shared shell
     var shell = HtmlService.createTemplateFromFile('shared_shell');
     shell.content = debug + frag;
     return shell.evaluate().setTitle('Service Tracking Hub');
@@ -65,56 +62,71 @@ function include(name) {
 
 /* =========================
    API exposed to the client
-   (DEBUG: returns deterministic objects)
    ========================= */
 
-/** Simple connectivity probe */
+/** Connectivity probe */
 function ping() {
   return {
     status: 'ok',
-    _marker: 'ping_debug_v1',
+    _marker: 'ping_v2',
     from: 'Code.gs',
     at: new Date().toISOString()
   };
 }
 
-/** DEBUG: do not call service; just echo input */
+/** LIVE: call real api_searchClient (with strong diagnostics) */
 function searchClient(query) {
   var q = query || {};
-  return {
-    status: 'debug_searchClient',
-    _marker: 'searchClient_debug_v1',
-    received: q,
-    note: 'This is a debug response from Code.gs (no service calls).',
-    at: new Date().toISOString()
-  };
+  try {
+    console.log('>>> searchClient called with', JSON.stringify(q));
+    var out = api_searchClient(q);
+
+    // Normalize result into an object
+    var res = (out && typeof out === 'object') ? out : { status: 'empty', raw: out };
+    res._marker = 'searchClient_live_v2';
+    res._diag   = { received: q, at: new Date().toISOString() };
+
+    console.log('>>> searchClient returning', JSON.stringify(res));
+    return res;
+
+  } catch (e) {
+    console.error('>>> searchClient error', e);
+    return {
+      status: 'error',
+      where: 'searchClient',
+      message: String(e),
+      stack: (e && e.stack) ? String(e.stack) : '',
+      _marker: 'searchClient_live_v2_err',
+      _diag: { received: q, at: new Date().toISOString() }
+    };
+  }
 }
 
-/** DEBUG: do not call service; just echo input */
+/** DEBUG: echo only (we’ll switch to live after searchClient is solid) */
 function searchByFormId(formId) {
   return {
     status: 'debug_searchByFormId',
-    _marker: 'searchByFormId_debug_v1',
+    _marker: 'searchByFormId_debug_v2',
     received: formId == null ? null : String(formId),
-    note: 'This is a debug response from Code.gs (no service calls).',
+    note: 'Debug stub — service not called yet.',
     at: new Date().toISOString()
   };
 }
 
-/** DEBUG: pretend we created/updated and return a fake clientId */
+/** DEBUG: pretend to create and return a fake id */
 function createClient(data) {
   var d = data || {};
   return {
     status: 'debug_createClient',
-    _marker: 'createClient_debug_v1',
+    _marker: 'createClient_debug_v2',
     received: d,
     result: { success: true, clientId: 'C-DEBUG-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMddHHmmss') },
-    note: 'This is a debug response from Code.gs (no service calls).',
+    note: 'Debug stub — service not called yet.',
     at: new Date().toISOString()
   };
 }
 
-/** DEBUG: pretend we merged and return a shallow spread */
+/** DEBUG: pretend to merge by shallow spread */
 function mergeClient(existing, candidate) {
   var ex = existing || {};
   var ca = candidate || {};
@@ -124,9 +136,9 @@ function mergeClient(existing, candidate) {
 
   return {
     status: 'debug_mergeClient',
-    _marker: 'mergeClient_debug_v1',
+    _marker: 'mergeClient_debug_v2',
     merged: merged,
-    note: 'This is a debug merge from Code.gs (no service calls).',
+    note: 'Debug stub — service not called yet.',
     at: new Date().toISOString()
   };
 }
