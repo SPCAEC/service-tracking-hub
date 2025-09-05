@@ -73,11 +73,21 @@ function hub_ping() {
 
 /** LIVE: call real api_searchClient; ALWAYS return a visible object */
 function hub_searchClient(query) {
-  return {
-    status: 'constant_ok',
-    echo: query,
-    _marker: 'hub_searchClient_constant'
-  };
+  try {
+    var out = api_searchClient(query || {});
+    // Bypass HtmlService serialization quirks by stringifying ourselves.
+    return {
+      status: 'json_wrapped',
+      _marker: 'hub_searchClient_json',
+      resultJson: JSON.stringify(out)  // <-- client will JSON.parse this
+    };
+  } catch (e) {
+    return {
+      status: 'error',
+      where: 'hub_searchClient',
+      message: String(e)
+    };
+  }
 }
 
 /** (Optional) wire live once search flow is confirmed */
