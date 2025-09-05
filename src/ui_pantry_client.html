@@ -30,7 +30,10 @@
 
     if (formId) {
       google.script.run
-        .withSuccessHandler(render)
+        .withSuccessHandler((res) => {
+          console.log('[searchByFormId] RES =', res); // 👈 tap
+          render(res);
+        })
         .withFailureHandler(err => {
           console.error('[server error]', err);
           document.getElementById('result').innerHTML =
@@ -42,7 +45,10 @@
         .searchByFormId(formId);
     } else {
       google.script.run
-        .withSuccessHandler(render)
+        .withSuccessHandler((res) => {
+          console.log('[searchClient] RES =', res); // 👈 tap
+          render(res);
+        })
         .withFailureHandler(err => {
           console.error('[server error]', err);
           document.getElementById('result').innerHTML =
