@@ -1,4 +1,4 @@
-/** Service Tracking Hub — Router + API (Code.js) */
+/** Service Tracking Hub — Router + API (Code.gs) */
 
 function doGet(e) {
   var view = (e && e.parameter && e.parameter.view) ? String(e.parameter.view) : 'hub';
@@ -12,7 +12,7 @@ function serveView(view) {
     var pageHtml = String(pageTpl.evaluate().getContent() || '');
     var len = pageHtml.length;
 
-    // Build a small debug banner (remove after we fix things)
+    // Debug banner (remove once stable)
     var debug =
       '<div style="position:sticky;top:0;z-index:9999;' +
       'background:#fef3c7;border-bottom:1px solid #f59e0b;padding:8px 12px;' +
@@ -22,7 +22,6 @@ function serveView(view) {
       '</div>';
 
     if (!len) {
-      // Safety fallback: show why it's empty
       pageHtml =
         '<div style="padding:16px;background:#fee2e2;border:1px solid #ef4444;border-radius:8px;">' +
         'View "<b>' + esc(view) + '</b>" evaluated to empty content. ' +
@@ -30,7 +29,6 @@ function serveView(view) {
         '</div>';
     }
 
-    // Wrap inside the shared shell template
     var shellTpl = HtmlService.createTemplateFromFile('shared_shell');
     shellTpl.content = debug + pageHtml; // inject debug + page
     return shellTpl.evaluate().setTitle('Service Tracking Hub');
@@ -61,31 +59,47 @@ function include(name) {
 
 /* =========================
    API exposed to the client
-   (delegates to service layer)
+   (delegates to service layer, with diagnostics)
    ========================= */
+
 function searchClient(query) {
-  try { 
-    var out = api_searchClient(query || {}); 
-    out._marker = 'searchClient_wrapper_v1';
+  console.log('>>> searchClient wrapper called with', JSON.stringify(query));
+  try {
+    var out = api_searchClient(query || {});
+    console.log('>>> searchClient result', JSON.stringify(out));
+    if (out && typeof out === 'object') out._marker = 'searchClient_wrapper_v1';
     return out;
-  } catch (e) { 
-    return { status: 'error', where: 'searchClient', message: String(e) }; 
+  } catch (e) {
+    console.error('>>> searchClient error', e);
+    return { status: 'error', where: 'searchClient', message: String(e) };
   }
 }
+
 function searchByFormId(formId) {
-  try { 
-    var out = api_searchByFormId(formId); 
-    out._marker = 'searchByFormId_wrapper_v1';
+  console.log('>>> searchByFormId wrapper called with', JSON.stringify(formId));
+  try {
+    var out = api_searchByFormId(formId);
+    console.log('>>> searchByFormId result', JSON.stringify(out));
+    if (out && typeof out === 'object') out._marker = 'searchByFormId_wrapper_v1';
     return out;
-  } catch (e) { 
-    return { status: 'error', where: 'searchByFormId', message: String(e) }; 
+  } catch (e) {
+    console.error('>>> searchByFormId error', e);
+    return { status: 'error', where: 'searchByFormId', message: String(e) };
   }
 }
+
 function createClient(data) {
-  try { return api_createOrUpdateClient(data || {}); }
-  catch (e) { return { status: 'error', where: 'createClient', message: String(e), stack: (e && e.stack) ? String(e.stack) : '' }; }
+  try {
+    return api_createOrUpdateClient(data || {});
+  } catch (e) {
+    return { status: 'error', where: 'createClient', message: String(e), stack: (e && e.stack) ? String(e.stack) : '' };
+  }
 }
+
 function mergeClient(existing, candidate) {
-  try { return api_mergeClientWithForm(existing || {}, candidate || {}); }
-  catch (e) { return { status: 'error', where: 'mergeClient', message: String(e), stack: (e && e.stack) ? String(e.stack) : '' }; }
+  try {
+    return api_mergeClientWithForm(existing || {}, candidate || {});
+  } catch (e) {
+    return { status: 'error', where: 'mergeClient', message: String(e), stack: (e && e.stack) ? String(e.stack) : '' };
+  }
 }
