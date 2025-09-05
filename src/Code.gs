@@ -64,12 +64,22 @@ function include(name) {
    (delegates to service layer)
    ========================= */
 function searchClient(query) {
-  try { return api_searchClient(query || {}); }
-  catch (e) { return { status: 'error', where: 'searchClient', message: String(e), stack: (e && e.stack) ? String(e.stack) : '' }; }
+  try { 
+    var out = api_searchClient(query || {}); 
+    out._marker = 'searchClient_wrapper_v1';
+    return out;
+  } catch (e) { 
+    return { status: 'error', where: 'searchClient', message: String(e) }; 
+  }
 }
 function searchByFormId(formId) {
-  try { return api_searchByFormId(formId); }
-  catch (e) { return { status: 'error', where: 'searchByFormId', message: String(e), stack: (e && e.stack) ? String(e.stack) : '' }; }
+  try { 
+    var out = api_searchByFormId(formId); 
+    out._marker = 'searchByFormId_wrapper_v1';
+    return out;
+  } catch (e) { 
+    return { status: 'error', where: 'searchByFormId', message: String(e) }; 
+  }
 }
 function createClient(data) {
   try { return api_createOrUpdateClient(data || {}); }
