@@ -1,10 +1,19 @@
 <script>
 /**
  * Client-side API bridge → server (Apps Script)
- * Targets uniquely named exports to avoid collisions:
- *   hub_ping, hub_searchClient, hub_searchByFormId, hub_createClient, hub_mergeClient
+ * Targets uniquely named exports:
+ *   hub_ping, hub_searchClient, hub_searchByFormId, hub_createClient, hub_mergeClient, hub_getOptions
+ *
+ * Notes:
+ * - getOptions() caches results for this page session.
+ * - All methods accept optional onSuccess/onError callbacks.
  */
+
 const API = {
+  /** simple per-page cache for options */
+  _optionsCache: null,
+  _optionsFetchedAt: 0,
+
   _handleFailure(err) {
     console.error('[server error]', err);
     const el = document.getElementById('result');
@@ -50,6 +59,33 @@ const API = {
       .withSuccessHandler(onSuccess)
       .withFailureHandler(onError || API._handleFailure)
       .hub_mergeClient(existing, candidate);
+  },
+
+  /**
+   * Fetch dropdown option sets from server Script Properties (with defaults on server).
+   * Caches for this page session; pass {force:true} to bypass cache.
+   *
+   * @param {Function} onSuccess - receives a plain object: { FieldName: [options...] , ... }
+   * @param {Function} onError   - optional failure handler
+   * @param {Object}   opts      - { force: boolean } to skip cache
+   */
+  getOptions(onSuccess, onError, opts) {
+    const force = !!(opts && opts.force);
+    if (!force && API._optionsCache) {
+      // serve from cache
+      try { onSuccess && onSuccess(API._optionsCache); } catch (_) {}
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler((res) => {
+        // Expecting a plain object of arrays
+        API._optionsCache = (res && typeof res === 'object') ? res : {};
+        API._optionsFetchedAt = Date.now();
+        try { onSuccess && onSuccess(API._optionsCache); } catch (_) {}
+      })
+      .withFailureHandler(onError || API._handleFailure)
+      .hub_getOptions();
   }
 };
 </script>

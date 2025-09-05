@@ -1,12 +1,103 @@
 <script>
 /**
- * Pantry Client screen controller
- * - Shows "UI loaded" banner + server ping on load
- * - Calls API.searchClient / API.searchByFormId / API.createClient
- * - Always shows Raw response diagnostics
+ * Pantry Client screen controller (rev with UX rules)
+ * Implements:
+ *  1) Enter-to-search
+ *  2) Hide backend-only fields in view
+ *  3) Booleans as icons/checkboxes
+ *  4) Friendly display labels
+ *  5) Hide normalized fields in edit
+ *  6) Friendly labels in edit
+ *  7) Checkboxes for boolean fields in edit
+ *  8) (client side ready) Dropdowns fed by server options
+ *  9) No "Create Client" button when editing
  */
+
 (function () {
+  // ---------- Config ----------
+  const HIDE_IN_VIEW = ['PhoneNormalized', 'EmailNormalized'];
+  const HIDE_IN_EDIT = ['PhoneNormalized', 'EmailNormalized'];
+
+  const BOOL_FIELDS = ['ConsentSMS', 'ConsentEmail', 'Returning Client'];
+
+  // Fields rendered as <select>. Options come from API.getOptions() (with graceful fallbacks).
+  const DROPDOWN_FIELDS = [
+    'PreferredContact',
+    'How did you hear about us?',
+    'Language',
+    'Military Status',
+    'Employment',
+    'Ethnic Background',
+    'Transportation',
+    'Gender Identity',
+    'Public Services',
+    'Income',
+    'Income Contribution',
+    'Household Size',
+    'Housing Status'
+  ];
+
+  // Friendly labels in both view and edit
+  const LABELS = {
+    PreferredContact: 'Preferred Contact Method',
+    ConsentSMS: 'SMS Opt-In',
+    ConsentEmail: 'Email Opt-In',
+    FirstSeenAt: 'Date Client Created',
+    FirstSeenSource: 'Original System of Client Creation'
+  };
+
+  // Fallback local options (used if the server doesn't provide any)
+  const DEFAULT_OPTIONS = {
+    PreferredContact: ['Text', 'Email'],
+    'How did you hear about us?': [
+      'Search engine','Website','Social Media','Flier','E-mail','Radio','TV','Newspaper',
+      'Word of mouth','Walk-up','SPCA Staff','Other'
+    ],
+    Language: [
+      'English','Spanish','Arabic','Chinese','French','German','Korean','Portuguese','Russian',
+      'Vietnamese','Prefer not to answer','Other'
+    ],
+    'Military Status': ['Yes','No','Prefer not to answer'],
+    Employment: ['Part-time','Full-time','Self-employed','Student','Retired','Unemployed','Prefer not to answer'],
+    'Ethnic Background': [
+      'White (Eg: German, Irish, English, Italian, Polish, French, etc)',
+      'Hispanic, Latino or Spanish origin (Eg: Mexican..., Puerto Rican, etc)',
+      'Black or African American (Eg: African American, Jamaican, Haitian, etc)',
+      'Asian (Eg: Chinese, Filipino, Asian Indian, Vietnamese, Korean, Japanese, etc)',
+      'American Indian or Alaska Native (...Navajo, Blackfeet, Mayan, Aztec, etc)',
+      'Middle Eastern or North African (Eg: Lebanese, Iranian, Egyptian, etc)',
+      'Native Hawaiian or Other Pacific Islander (Eg: Hawaiian, Samoan, etc)',
+      'Some other race, ethnicity or origin',
+      'Prefer not to answer'
+    ],
+    Transportation: [
+      'Private vehicle (own/lease your own, friend or family member, etc)',
+      'Public Transit','Bicycle','Walk','Prefer not to answer','Other'
+    ],
+    'Gender Identity': [
+      'Male','Female','Transgender Male','Transgender Female',
+      'Gender Variant/Non-Conforming','Non-binary','Not listed','Prefer not to answer'
+    ],
+    'Public Services': ['Yes','No','Prefer not to answer'],
+    Income: ['$0-$30,000','$31,000-$60,000','$61,000-$90,000','$91,000-$120,000','$120,000 +','Prefer not to answer'],
+    'Income Contribution': ['1','2','3','4','5+','Prefer not to answer'],
+    'Household Size': ['1','2','3','4','5','6','7+','Prefer not to answer'],
+    'Housing Status': [
+      'I have stable, secure housing with my pet.',
+      'My housing is in transition.',
+      'I am currently unhoused with my pet.',
+      'Prefer not to answer','Other'
+    ]
+  };
+
+  // Will be filled on load from server, else fallback to DEFAULT_OPTIONS
+  let OPTIONS = JSON.parse(JSON.stringify(DEFAULT_OPTIONS));
+
+  // Persist last parsed server response for actions like Merge/Edit
+  let LAST = null;
+
   const $ = (id) => document.getElementById(id);
+  const displayLabel = (k) => LABELS[k] || k;
 
   // ---------- Event wiring ----------
   document.addEventListener('DOMContentLoaded', () => {
@@ -17,17 +108,39 @@
       </div>`;
     }
 
-    // 🔔 Ping server to prove round-trip works
+    // Fetch dropdown options (server may override defaults)
+    if (API.getOptions) {
+      API.getOptions((serverOpts) => {
+        if (serverOpts && typeof serverOpts === 'object') {
+          OPTIONS = Object.assign({}, DEFAULT_OPTIONS, serverOpts);
+        }
+        appendPing(R);
+      });
+    } else {
+      appendPing(R);
+    }
+
+    // Wire buttons
+    $('btnSearch')?.addEventListener('click', search);
+    $('btnReset')?.addEventListener('click', reset);
+
+    // 1) Enter-to-search
+    ['inpClientId','inpPhone','inpEmail','inpFormId'].forEach(id => {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); search(); }
+      });
+    });
+  });
+
+  function appendPing(R) {
     API.ping((res) => {
       const pre = document.createElement('pre');
       pre.textContent = 'PING → ' + JSON.stringify(res, null, 2);
       R && R.appendChild(pre);
     });
-
-    // Wire buttons
-    $('btnSearch')?.addEventListener('click', search);
-    $('btnReset')?.addEventListener('click', reset);
-  });
+  }
 
   function reset() {
     ['inpClientId', 'inpPhone', 'inpEmail', 'inpFormId'].forEach((id) => {
@@ -36,6 +149,7 @@
     });
     const R = $('result');
     if (R) R.innerHTML = '';
+    LAST = null;
   }
 
   // ---------- Actions ----------
@@ -60,8 +174,9 @@
     }
   }
 
-    function render(res){
-    const R = document.getElementById('result');
+  // ---------- Render ----------
+  function render(res){
+    const R = $('result');
     if (!R) return;
 
     // If server wrapped payload as JSON, parse it
@@ -74,12 +189,11 @@
       }
     }
 
+    // Keep for subsequent actions
+    LAST = parsed;
+
     // 🔎 Diagnostics (shows both the wrapper and parsed)
-    const diag = {
-      receivedAt: new Date().toISOString(),
-      wrapper: res,
-      parsed: parsed
-    };
+    const diag = { receivedAt: new Date().toISOString(), wrapper: res, parsed };
     R.innerHTML = `
       <div class="card" style="border-color:#94a3b8;">
         <h3 style="margin:0 0 .5rem;">Raw response</h3>
@@ -87,16 +201,10 @@
       </div>
     `;
 
-    // If parse failed or we have no object, stop after showing diagnostics
     if (!parsed || typeof parsed !== 'object') return;
 
-    // ----- Normal flow uses the PARSED object from here -----
     if (parsed.status === 'error') {
-      R.innerHTML += `
-        <div class="card" style="border-color:#ef4444;">
-          <h3 style="margin:0 0 .5rem;">Server error ${parsed.where ? '('+parsed.where+')' : ''}</h3>
-          <pre style="white-space:pre-wrap;">${escape(parsed.message || '')}</pre>
-        </div>`;
+      R.innerHTML += errorCard(parsed.where, parsed.message);
       return;
     }
 
@@ -111,21 +219,29 @@
     }
 
     if (parsed.status === 'new_from_form') {
-      R.innerHTML += cardCreate(parsed.candidateFromForm || {});
+      R.innerHTML += cardEditOrCreate('create', parsed.candidateFromForm || {});
       return;
     }
 
     if (parsed.status === 'not_found' || parsed.status === 'form_not_found') {
-      R.innerHTML += cardCreate({});
+      R.innerHTML += cardEditOrCreate('create', {});
       return;
     }
 
-    // Fallback
     R.innerHTML += `<pre>${escape(JSON.stringify(parsed, null, 2))}</pre>`;
   }
 
   // ---------- UI builders ----------
+  function errorCard(where, message){
+    return `
+      <div class="card" style="border-color:#ef4444;">
+        <h3 style="margin:0 0 .5rem;">Server error ${where ? '('+escape(where)+')' : ''}</h3>
+        <pre style="white-space:pre-wrap;">${escape(message || '')}</pre>
+      </div>`;
+  }
+
   function cardExisting(c, opts) {
+    // 2,3,4: View rules applied in table
     return `
       <div class="card">
         <h3 style="margin:0 0 .5rem;">${(opts && opts.title) || 'Client'}</h3>
@@ -139,12 +255,12 @@
   }
 
   function cardPossibleDup(res) {
-    const left = res.client || {};
+    const left  = res.client || {};
     const right = res.candidateFromForm || {};
     const reasons = Array.isArray(res.matchReasons) ? res.matchReasons.join(' + ') : '';
     return `
       <div class="card">
-        <h3 style="margin:0 0 .5rem;">Possible duplicate ${reasons ? '(' + reasons + ')' : ''}</h3>
+        <h3 style="margin:0 0 .5rem;">Possible duplicate ${reasons ? '(' + escape(reasons) + ')' : ''}</h3>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
           <div><h4 style="margin:.25rem 0;">Existing</h4>${tableFields(left)}</div>
           <div><h4 style="margin:.25rem 0;">From Form</h4>${tableFields(right)}</div>
@@ -158,7 +274,9 @@
     `;
   }
 
-  function cardCreate(seed) {
+  // 5,6,7,8,9: Edit/Create form with labels, hidden fields, checkboxes, selects, and no "Create" button when editing
+  function cardEditOrCreate(mode, seed){
+    const isEdit = mode === 'edit';
     const fields = [
       'ClientID','FirstName','LastName','Address1','Address2','City','State','ZIP',
       'Phone','PhoneNormalized','Email','EmailNormalized',
@@ -168,28 +286,61 @@
       'Transportation','Gender Identity','Public Services','Income','Income Contribution',
       'Household Size','Housing Status'
     ];
+
     const init = {};
-    fields.forEach((k) => (init[k] = seed[k] || ''));
+    fields.forEach(k => init[k] = seed && seed[k] != null ? seed[k] : '');
+
+    const rows = fields.map((k) => {
+      if (isEdit && HIDE_IN_EDIT.includes(k)) return ''; // 5: hide normalized in edit
+
+      const label = displayLabel(k);
+      const nameAttr = k; // use sheet header as the "name"
+      const value = init[k];
+
+      // 7: booleans as checkboxes in edit
+      if (BOOL_FIELDS.includes(k)) {
+        const checked = truthy(value) ? 'checked' : '';
+        return `
+          <div class="field">
+            <label>${escape(label)}</label>
+            <input type="checkbox" name="${escapeAttr(nameAttr)}" ${checked}>
+          </div>`;
+      }
+
+      // 8: dropdowns from options (with "Other" support on certain fields)
+      if (DROPDOWN_FIELDS.includes(k)) {
+        const opts = optionsFor(k);
+        const hasOther = opts.includes('Other') || /Other\b/i.test(opts.join('||'));
+        const sel = selectHTML(nameAttr, value, opts, hasOther);
+        return `
+          <div class="field">
+            <label>${escape(label)}</label>
+            ${sel}
+          </div>`;
+      }
+
+      // default: text input
+      const required = (k === 'FirstName' || k === 'LastName') ? 'required' : '';
+      return `
+        <div class="field">
+          <label>${escape(label)}${required ? ' *' : ''}</label>
+          <input name="${escapeAttr(nameAttr)}" value="${escapeAttr(value)}" ${required}>
+        </div>`;
+    }).join('');
 
     return `
       <div class="card">
-        <h3 style="margin:0 0 .5rem;">${seed && (seed.FirstName || seed.LastName) ? 'Review or Create Client' : 'Create New Client'}</h3>
+        <h3 style="margin:0 0 .5rem;">${isEdit ? 'Edit Client' : (seed && (seed.FirstName || seed.LastName) ? 'Review or Create Client' : 'Create New Client')}</h3>
         <form id="formClient" onsubmit="return false;">
           <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
-            ${fields.map((k) => {
-              const required = (k === 'FirstName' || k === 'LastName') ? 'required' : '';
-              const val = escape(init[k]);
-              return `
-                <div class="field">
-                  <label>${k}${required ? ' *' : ''}</label>
-                  <input name="${k}" value="${val}" ${required} />
-                </div>
-              `;
-            }).join('')}
+            ${rows}
           </div>
         </form>
         <div style="margin-top:.75rem;">
-          <button type="button" onclick="UI_PC.saveNew()">Create Client</button>
+          ${isEdit
+            ? `<button type="button" onclick="UI_PC.saveEdit()">Save</button>`
+            : `<button type="button" onclick="UI_PC.saveNew()">Create Client</button>`
+          }
         </div>
       </div>
     `;
@@ -205,95 +356,163 @@
       'Transportation','Gender Identity','Public Services','Income','Income Contribution',
       'Household Size','Housing Status'
     ];
-    const val = (k) => (c && c[k] != null ? String(c[k]) : '');
+    const rows = fields.map((k) => {
+      if (HIDE_IN_VIEW.includes(k)) return ''; // 2: hide backend-only columns
+      const label = displayLabel(k);
+      const raw = c && c[k] != null ? c[k] : '';
+
+      // 3: booleans as icons in view
+      if (BOOL_FIELDS.includes(k)) {
+        const on = truthy(raw);
+        const icon = on ? '✔️' : '❌';
+        const sr = on ? 'Yes' : 'No';
+        return rowHTML(label, `<span aria-label="${sr}">${icon}</span>`);
+      }
+      return rowHTML(label, escape(String(raw)));
+    }).join('');
+
     return `
       <table style="width:100%; border-collapse:collapse;">
-        <tbody>
-          ${fields.map((k) => `
-            <tr>
-              <td style="padding:.25rem .5rem; color:#475569; width:240px;">${k}</td>
-              <td style="padding:.25rem .5rem;">${escape(val(k))}</td>
-            </tr>`).join('')}
-        </tbody>
+        <tbody>${rows}</tbody>
       </table>
     `;
   }
 
-  // ---------- Exposed actions for buttons ----------
+  // ---------- Exposed actions ----------
   window.UI_PC = {
     editExisting() {
+      if (!LAST || !LAST.client) { APP.toast('Nothing to edit.'); return; }
       const R = $('result');
-      const read = R?.querySelector('table');
-      if (!read) { APP.toast('Nothing to edit.'); return; }
-      const data = tableToObject(read);
-      R.innerHTML =
-        cardCreate(data).replace('Create New Client','Edit Client') +
-        `<div style="margin-top:.5rem;">
-           <button type="button" onclick="UI_PC.saveEdit()">Save</button>
-         </div>`;
+      R.innerHTML = cardEditOrCreate('edit', LAST.client);
     },
+
     saveEdit() {
       const data = formToObject('formClient');
       normalizeClient(data);
       API.createClient(data, () => { APP.toast('Client updated.'); reset(); });
     },
+
     saveNew() {
       const data = formToObject('formClient');
       if (!data.FirstName || !data.LastName) { APP.toast('First and Last Name are required.'); return; }
       normalizeClient(data);
       API.createClient(data, () => { APP.toast('Client created.'); reset(); });
     },
+
     continue() {
       APP.toast('Continue to Pets (coming next)…');
     },
+
     useExisting() {
       APP.toast('Using existing client. Continue to Pets…');
     },
+
     merge() {
-      const R = $('result');
-      const blocks = R?.querySelectorAll('table');
-      if (!blocks || blocks.length < 2) { APP.toast('No merge candidates.'); return; }
-      const existing = tableToObject(blocks[0]);
-      const fromForm = tableToObject(blocks[1]);
-      API.mergeClient(existing, fromForm, (merged) => {
+      if (!LAST || !LAST.client || !LAST.candidateFromForm) {
+        APP.toast('No merge candidates.');
+        return;
+      }
+      API.mergeClient(LAST.client, LAST.candidateFromForm, (merged) => {
         API.createClient(merged, () => { APP.toast('Merged & saved.'); reset(); });
       });
     },
+
     createFromForm() {
-      const R = $('result');
-      const blocks = R?.querySelectorAll('table');
-      if (!blocks || blocks.length < 2) { APP.toast('No form candidate.'); return; }
-      const fromForm = tableToObject(blocks[1]);
-      normalizeClient(fromForm);
-      API.createClient(fromForm, () => { APP.toast('Client created from form.'); reset(); });
+      if (!LAST || !LAST.candidateFromForm) { APP.toast('No form candidate.'); return; }
+      const data = Object.assign({}, LAST.candidateFromForm);
+      normalizeClient(data);
+      API.createClient(data, () => { APP.toast('Client created from form.'); reset(); });
     }
   };
 
   // ---------- Helpers ----------
+  function rowHTML(label, valueHTML){
+    return `
+      <tr>
+        <td style="padding:.25rem .5rem; color:#475569; width:260px;">${escape(label)}</td>
+        <td style="padding:.25rem .5rem;">${valueHTML}</td>
+      </tr>`;
+  }
+
+  function selectHTML(name, value, opts, allowOther){
+    const id = slug(name);
+    const selected = (v) => (String(v) === String(value) ? 'selected' : '');
+    const optionsHTML = opts.map(o => `<option value="${escapeAttr(o)}" ${selected(o)}>${escape(o)}</option>`).join('');
+    const otherId = `${id}__other`;
+    const showOther = allowOther && String(value).trim() && !opts.includes(String(value));
+    return `
+      <select name="${escapeAttr(name)}" id="${escapeAttr(id)}" data-has-other="${allowOther ? '1':'0'}" onchange="(function(sel){ 
+        const hasOther=sel.dataset.hasOther==='1';
+        const o=document.getElementById('${escapeAttr(otherId)}');
+        if(!o) return;
+        if(hasOther && sel.value==='Other'){ o.style.display='block'; o.disabled=false; o.focus(); }
+        else { o.style.display='none'; o.disabled=true; if(sel.value!=='Other'){ o.value=''; } }
+      })(this)">
+        ${optionsHTML}
+      </select>
+      ${allowOther ? `
+        <input id="${escapeAttr(otherId)}" placeholder="Please specify" style="margin-top:.25rem;${showOther?'':'display:none;'}" ${showOther?'':'disabled'}
+               value="${showOther ? escapeAttr(value) : ''}">
+      `:''}
+    `;
+  }
+
+  function optionsFor(field){
+    const o = OPTIONS && OPTIONS[field];
+    return Array.isArray(o) && o.length ? o.slice() : (DEFAULT_OPTIONS[field] || []);
+  }
+
+  function truthy(v){
+    if (typeof v === 'boolean') return v;
+    const s = String(v).toLowerCase().trim();
+    return ['true','yes','y','1','checked'].includes(s);
+  }
+
   function formToObject(formId) {
+    const root = document.getElementById(formId);
     const o = {};
-    document.querySelectorAll(`#${formId} input`).forEach((i) => o[i.name] = i.value || '');
-    return o;
-  }
-  function tableToObject(tbl) {
-    const o = {};
-    tbl.querySelectorAll('tr').forEach((tr) => {
-      const tds = tr.querySelectorAll('td');
-      if (tds.length >= 2) o[tds[0].textContent.trim()] = tds[1].textContent;
+    if (!root) return o;
+
+    // inputs (text/email/etc.)
+    root.querySelectorAll('input[name]').forEach((i) => {
+      if (i.type === 'checkbox') {
+        o[i.name] = !!i.checked;
+      } else if (i.id && i.id.endsWith('__other') && i.disabled) {
+        // ignore hidden other-input if disabled
+      } else {
+        o[i.name] = i.value || '';
+      }
     });
+
+    // selects (+ other text if visible)
+    root.querySelectorAll('select[name]').forEach((s) => {
+      const val = s.value;
+      const other = document.getElementById(`${s.id}__other`);
+      if (val === 'Other' && other && !other.disabled && other.style.display !== 'none') {
+        o[s.name] = other.value || '';
+      } else {
+        o[s.name] = val || '';
+      }
+    });
+
     return o;
   }
+
   function normalizeClient(o) {
-    if (o.Email && !o.EmailNormalized) o.EmailNormalized = o.Email.toLowerCase();
+    if (o.Email && !o.EmailNormalized) o.EmailNormalized = String(o.Email).toLowerCase();
     if (o.Phone && !o.PhoneNormalized) {
       const digits = String(o.Phone).replace(/\D/g,'');
       o.PhoneNormalized = digits.length >= 10 ? digits.slice(-10) : digits;
     }
   }
+
+  function slug(s){ return String(s).replace(/\s+/g,'_').replace(/[^\w\-]/g,'').toLowerCase(); }
+
   function escape(s) {
-    return String(s||'').replace(/[&<>"']/g, c =>
-      ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])
-    );
+    return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function escapeAttr(s) {
+    return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 })();
 </script>

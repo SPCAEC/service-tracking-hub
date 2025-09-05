@@ -79,18 +79,14 @@ function hub_searchClient(query) {
     return {
       status: 'json_wrapped',
       _marker: 'hub_searchClient_json',
-      resultJson: JSON.stringify(out)  // <-- client will JSON.parse this
+      resultJson: JSON.stringify(out)  // client parses this
     };
   } catch (e) {
-    return {
-      status: 'error',
-      where: 'hub_searchClient',
-      message: String(e)
-    };
+    return { status: 'error', where: 'hub_searchClient', message: String(e) };
   }
 }
 
-/** (Optional) wire live once search flow is confirmed */
+/** Live form-id search (returns a normal object; UI handles either shape) */
 function hub_searchByFormId(formId) {
   console.log('>>> hub_searchByFormId input', formId);
   try {
@@ -132,4 +128,107 @@ function hub_mergeClient(existing, candidate) {
     console.error('>>> hub_mergeClient error', e);
     return { status: 'error', where: 'hub_mergeClient', message: String(e) };
   }
+}
+
+/**
+ * NEW: Provide dropdown option sets to the UI.
+ * Reads Script Properties key "OPTIONS_JSON" (stringified JSON), falling back to defaults below.
+ *
+ * Example to override (in Apps Script editor):
+ *   - Project Settings → Script properties → Add property:
+ *       Name: OPTIONS_JSON
+ *       Value: {"PreferredContact":["Text","Email","Phone"], "Language":["English","Spanish","Other"]}
+ */
+function hub_getOptions() {
+  try {
+    var options = readOptionsFromProps_();
+    // Ensure it’s safe to serialize (plain object of arrays of strings)
+    var clean = sanitizeOptions_(options);
+    return clean;
+  } catch (e) {
+    console.error('>>> hub_getOptions error', e);
+    // Never fail the UI; return defaults instead
+    return getDefaultOptions_();
+  }
+}
+
+/* =========================
+   Options helpers (Script Properties + defaults)
+   ========================= */
+
+function readOptionsFromProps_() {
+  var props = PropertiesService.getScriptProperties();
+  var raw = props && props.getProperty('OPTIONS_JSON');
+  if (!raw) return getDefaultOptions_(); // no overrides set
+
+  try {
+    var parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return getDefaultOptions_();
+    return parsed;
+  } catch (e) {
+    console.error('Invalid OPTIONS_JSON in Script Properties:', e);
+    return getDefaultOptions_();
+  }
+}
+
+function sanitizeOptions_(o) {
+  var clean = {};
+  var defaults = getDefaultOptions_();
+
+  // Only allow fields present in defaults to avoid huge/unsafe payloads.
+  Object.keys(defaults).forEach(function (key) {
+    var val = o && o[key];
+    if (Array.isArray(val)) {
+      // cast everything to strings
+      clean[key] = val.map(function (x) { return String(x); });
+    } else {
+      clean[key] = defaults[key].slice();
+    }
+  });
+  return clean;
+}
+
+function getDefaultOptions_() {
+  return {
+    PreferredContact: ['Text', 'Email'],
+    'How did you hear about us?': [
+      'Search engine','Website','Social Media','Flier','E-mail','Radio','TV','Newspaper',
+      'Word of mouth','Walk-up','SPCA Staff','Other'
+    ],
+    Language: [
+      'English','Spanish','Arabic','Chinese','French','German','Korean','Portuguese','Russian',
+      'Vietnamese','Prefer not to answer','Other'
+    ],
+    'Military Status': ['Yes','No','Prefer not to answer'],
+    Employment: ['Part-time','Full-time','Self-employed','Student','Retired','Unemployed','Prefer not to answer'],
+    'Ethnic Background': [
+      'White (Eg: German, Irish, English, Italian, Polish, French, etc)',
+      'Hispanic, Latino or Spanish origin (Eg: Mexican..., Puerto Rican, etc)',
+      'Black or African American (Eg: African American, Jamaican, Haitian, etc)',
+      'Asian (Eg: Chinese, Filipino, Asian Indian, Vietnamese, Korean, Japanese, etc)',
+      'American Indian or Alaska Native (...Navajo, Blackfeet, Mayan, Aztec, etc)',
+      'Middle Eastern or North African (Eg: Lebanese, Iranian, Egyptian, etc)',
+      'Native Hawaiian or Other Pacific Islander (Eg: Hawaiian, Samoan, etc)',
+      'Some other race, ethnicity or origin',
+      'Prefer not to answer'
+    ],
+    Transportation: [
+      'Private vehicle (own/lease your own, friend or family member, etc)',
+      'Public Transit','Bicycle','Walk','Prefer not to answer','Other'
+    ],
+    'Gender Identity': [
+      'Male','Female','Transgender Male','Transgender Female',
+      'Gender Variant/Non-Conforming','Non-binary','Not listed','Prefer not to answer'
+    ],
+    'Public Services': ['Yes','No','Prefer not to answer'],
+    Income: ['$0-$30,000','$31,000-$60,000','$61,000-$90,000','$91,000-$120,000','$120,000 +','Prefer not to answer'],
+    'Income Contribution': ['1','2','3','4','5+','Prefer not to answer'],
+    'Household Size': ['1','2','3','4','5','6','7+','Prefer not to answer'],
+    'Housing Status': [
+      'I have stable, secure housing with my pet.',
+      'My housing is in transition.',
+      'I am currently unhoused with my pet.',
+      'Prefer not to answer','Other'
+    ]
+  };
 }
