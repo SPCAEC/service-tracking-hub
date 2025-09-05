@@ -64,14 +64,18 @@ function include(name) {
    (delegates to service layer)
    ========================= */
 function searchClient(query) {
-  return api_searchClient(query || {});
+  // TEMP STUB to prove round-trip
+  return { status: 'ok', source: 'searchClient stub', echo: query || null };
 }
 function searchByFormId(formId) {
-  return api_searchByFormId(formId);
+  // TEMP STUB to prove round-trip
+  return { status: 'ok', source: 'searchByFormId stub', echo: formId || null };
 }
 function createClient(data) {
-  return api_createOrUpdateClient(data || {});
+  // TEMP STUB to prove round-trip
+  return { status: 'ok', source: 'createClient stub', echo: data || null };
 }
 function mergeClient(existing, candidate) {
-  return api_mergeClientWithForm(existing || {}, candidate || {});
+  // TEMP STUB to prove round-trip
+  return { status: 'ok', source: 'mergeClient stub', echo: { existing, candidate } };
 }
