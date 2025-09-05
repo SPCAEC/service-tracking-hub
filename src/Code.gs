@@ -64,18 +64,18 @@ function include(name) {
    (delegates to service layer)
    ========================= */
 function searchClient(query) {
-  // TEMP STUB to prove round-trip
-  return { status: 'ok', source: 'searchClient stub', echo: query || null };
+  try { return api_searchClient(query || {}); }
+  catch (e) { return { status: 'error', where: 'searchClient', message: String(e), stack: (e && e.stack) ? String(e.stack) : '' }; }
 }
 function searchByFormId(formId) {
-  // TEMP STUB to prove round-trip
-  return { status: 'ok', source: 'searchByFormId stub', echo: formId || null };
+  try { return api_searchByFormId(formId); }
+  catch (e) { return { status: 'error', where: 'searchByFormId', message: String(e), stack: (e && e.stack) ? String(e.stack) : '' }; }
 }
 function createClient(data) {
-  // TEMP STUB to prove round-trip
-  return { status: 'ok', source: 'createClient stub', echo: data || null };
+  try { return api_createOrUpdateClient(data || {}); }
+  catch (e) { return { status: 'error', where: 'createClient', message: String(e), stack: (e && e.stack) ? String(e.stack) : '' }; }
 }
 function mergeClient(existing, candidate) {
-  // TEMP STUB to prove round-trip
-  return { status: 'ok', source: 'mergeClient stub', echo: { existing, candidate } };
+  try { return api_mergeClientWithForm(existing || {}, candidate || {}); }
+  catch (e) { return { status: 'error', where: 'mergeClient', message: String(e), stack: (e && e.stack) ? String(e.stack) : '' }; }
 }
