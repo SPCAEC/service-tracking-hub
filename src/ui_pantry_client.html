@@ -56,35 +56,64 @@
   }
 
   function render(res){
-    const R = $('result');
-    if (!res) { R.textContent = 'No response.'; return; }
+    const R = document.getElementById('result');
 
-    // exact match (existing client)
+    // 🔎 Always show what came back, even if it's undefined/null
+    const diag = {
+      receivedAt: new Date().toISOString(),
+      typeof: typeof res,
+      isNull: res === null,
+      isUndefined: typeof res === 'undefined',
+      keys: res && typeof res === 'object' ? Object.keys(res) : [],
+      value: res
+    };
+    R.innerHTML = `
+      <div class="card" style="border-color:#94a3b8;">
+        <h3 style="margin:0 0 .5rem;">Raw response</h3>
+        <pre style="white-space:pre-wrap;">${escape(JSON.stringify(diag, null, 2))}</pre>
+      </div>
+    `;
+
+    // If it's undefined/null, bail after showing diagnostics
+    if (res == null) return;
+
+    // --- normal flow (after the diag block) ---
+    if (res.status === 'error') {
+      R.innerHTML += `
+        <div class="card" style="border-color:#ef4444;">
+          <h3 style="margin:0 0 .5rem;">Server error ${res.where ? '('+res.where+')' : ''}</h3>
+          <pre style="white-space:pre-wrap;">${escape(res.message || '')}</pre>
+        </div>`;
+      return;
+    }
+
     if (res.status === 'exact' && res.client) {
-      R.innerHTML = cardExisting(res.client, { title: 'Client Found' });
+      R.innerHTML += cardExisting(res.client, { title: 'Client Found' });
       return;
     }
 
-    // possible duplicate (form vs existing)
     if (res.status === 'possible_duplicate') {
-      R.innerHTML = cardPossibleDup(res);
+      R.innerHTML += cardPossibleDup(res);
       return;
     }
 
-    // new-from-form (prefilled) OR generic not-found
     if (res.status === 'new_from_form') {
-      R.innerHTML = cardCreate(res.candidateFromForm || {});
+      R.innerHTML += cardCreate(res.candidateFromForm || {});
       return;
     }
 
     if (res.status === 'not_found' || res.status === 'form_not_found') {
-      R.innerHTML = cardCreate({});
+      R.innerHTML += cardCreate({});
       return;
     }
 
-    // fallback
-    R.textContent = JSON.stringify(res, null, 2);
+    // Fallback
+    R.innerHTML += `<pre>${escape(JSON.stringify(res, null, 2))}</pre>`;
   }
+
+  // expose escape if not already
+  function escape(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
 
   // --- Cards / Forms ---
 
