@@ -1,6 +1,6 @@
-/** Service Tracking Hub — Router + API (Code.gs, PARTIAL live)
- *  searchClient → calls real api_searchClient (with diagnostics)
- *  searchByFormId / createClient / mergeClient → debug stubs for now
+/** Service Tracking Hub — Router + API (Code.gs, HUB-names) 
+ *  Exports uniquely named API functions to avoid collisions:
+ *    hub_ping, hub_searchClient, hub_searchByFormId, hub_createClient, hub_mergeClient
  */
 
 /** Entry */
@@ -61,64 +61,64 @@ function include(name) {
 }
 
 /* =========================
-   API exposed to the client
+   HUB-exported API (unique names)
    ========================= */
 
 /** Connectivity probe */
-function ping() {
+function hub_ping() {
   return {
     status: 'ok',
-    _marker: 'ping_v2',
+    _marker: 'hub_ping_v1',
     from: 'Code.gs',
     at: new Date().toISOString()
   };
 }
 
-/** LIVE: call real api_searchClient (with strong diagnostics) */
-function searchClient(query) {
+/** LIVE: call real api_searchClient (wrapped + never-null) */
+function hub_searchClient(query) {
   var q = query || {};
   try {
-    console.log('>>> searchClient called with', JSON.stringify(q));
+    console.log('>>> hub_searchClient called with', JSON.stringify(q));
     var out = api_searchClient(q);
 
-    // Normalize result into an object
+    // normalize result into an object
     var res = (out && typeof out === 'object') ? out : { status: 'empty', raw: out };
-    res._marker = 'searchClient_live_v2';
+    res._marker = 'hub_searchClient_v1';
     res._diag   = { received: q, at: new Date().toISOString() };
 
-    console.log('>>> searchClient returning', JSON.stringify(res));
+    console.log('>>> hub_searchClient returning', JSON.stringify(res));
     return res;
 
   } catch (e) {
-    console.error('>>> searchClient error', e);
+    console.error('>>> hub_searchClient error', e);
     return {
       status: 'error',
-      where: 'searchClient',
+      where: 'hub_searchClient',
       message: String(e),
       stack: (e && e.stack) ? String(e.stack) : '',
-      _marker: 'searchClient_live_v2_err',
+      _marker: 'hub_searchClient_err_v1',
       _diag: { received: q, at: new Date().toISOString() }
     };
   }
 }
 
-/** DEBUG: echo only (we’ll switch to live after searchClient is solid) */
-function searchByFormId(formId) {
+/** DEBUG for now — we’ll wire live after search flow is solid */
+function hub_searchByFormId(formId) {
   return {
     status: 'debug_searchByFormId',
-    _marker: 'searchByFormId_debug_v2',
+    _marker: 'hub_searchByFormId_v1',
     received: formId == null ? null : String(formId),
     note: 'Debug stub — service not called yet.',
     at: new Date().toISOString()
   };
 }
 
-/** DEBUG: pretend to create and return a fake id */
-function createClient(data) {
+/** DEBUG for now — pretend to create and return a fake id */
+function hub_createClient(data) {
   var d = data || {};
   return {
     status: 'debug_createClient',
-    _marker: 'createClient_debug_v2',
+    _marker: 'hub_createClient_v1',
     received: d,
     result: { success: true, clientId: 'C-DEBUG-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMddHHmmss') },
     note: 'Debug stub — service not called yet.',
@@ -126,8 +126,8 @@ function createClient(data) {
   };
 }
 
-/** DEBUG: pretend to merge by shallow spread */
-function mergeClient(existing, candidate) {
+/** DEBUG for now — shallow merge */
+function hub_mergeClient(existing, candidate) {
   var ex = existing || {};
   var ca = candidate || {};
   var merged = {};
@@ -136,7 +136,7 @@ function mergeClient(existing, candidate) {
 
   return {
     status: 'debug_mergeClient',
-    _marker: 'mergeClient_debug_v2',
+    _marker: 'hub_mergeClient_v1',
     merged: merged,
     note: 'Debug stub — service not called yet.',
     at: new Date().toISOString()

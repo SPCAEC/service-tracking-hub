@@ -1,4 +1,9 @@
 <script>
+/**
+ * Client-side API bridge → server (Apps Script)
+ * Targets uniquely named exports to avoid collisions:
+ *   hub_ping, hub_searchClient, hub_searchByFormId, hub_createClient, hub_mergeClient
+ */
 const API = {
   _handleFailure(err) {
     console.error('[server error]', err);
@@ -16,35 +21,35 @@ const API = {
     google.script.run
       .withSuccessHandler(onSuccess)
       .withFailureHandler(onError || API._handleFailure)
-      .ping();
+      .hub_ping();
   },
 
   searchClient(query, onSuccess, onError) {
     google.script.run
       .withSuccessHandler(onSuccess)
       .withFailureHandler(onError || API._handleFailure)
-      .searchClient(query);
+      .hub_searchClient(query);
   },
 
   searchByFormId(id, onSuccess, onError) {
     google.script.run
       .withSuccessHandler(onSuccess)
       .withFailureHandler(onError || API._handleFailure)
-      .searchByFormId(id);
+      .hub_searchByFormId(id);
   },
 
   createClient(data, onSuccess, onError) {
     google.script.run
       .withSuccessHandler(onSuccess)
       .withFailureHandler(onError || API._handleFailure)
-      .createClient(data);
+      .hub_createClient(data);
   },
 
   mergeClient(existing, candidate, onSuccess, onError) {
     google.script.run
       .withSuccessHandler(onSuccess)
       .withFailureHandler(onError || API._handleFailure)
-      .mergeClient(existing, candidate);
+      .hub_mergeClient(existing, candidate);
   }
 };
 </script>
