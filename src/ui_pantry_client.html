@@ -1,16 +1,17 @@
 <script>
 /**
- * Pantry Client screen controller (rev with UX rules)
- * Implements:
- *  1) Enter-to-search
- *  2) Hide backend-only fields in view
- *  3) Booleans as icons/checkboxes
- *  4) Friendly display labels
- *  5) Hide normalized fields in edit
- *  6) Friendly labels in edit
- *  7) Checkboxes for boolean fields in edit
- *  8) (client side ready) Dropdowns fed by server options
- *  9) No "Create Client" button when editing
+ * Pantry Client screen controller (enhanced)
+ * Adds:
+ *  - Larger typography on edit forms
+ *  - Wider grid & better wrapping for long labels/options
+ *  - Blank/null option in every dropdown ("— Select —")
+ *  - "Exit without save" to return to prior result view
+ * Keeps:
+ *  - Enter-to-search
+ *  - Hidden backend fields in view/edit
+ *  - Boolean icons in view, checkboxes in edit
+ *  - Friendly labels
+ *  - Server-driven dropdown options (with defaults)
  */
 
 (function () {
@@ -20,7 +21,6 @@
 
   const BOOL_FIELDS = ['ConsentSMS', 'ConsentEmail', 'Returning Client'];
 
-  // Fields rendered as <select>. Options come from API.getOptions() (with graceful fallbacks).
   const DROPDOWN_FIELDS = [
     'PreferredContact',
     'How did you hear about us?',
@@ -99,6 +99,61 @@
   const $ = (id) => document.getElementById(id);
   const displayLabel = (k) => LABELS[k] || k;
 
+  // Inject one-time styles for the edit form (larger type, wider columns, better wrapping)
+  function ensureEditStyles() {
+    if (document.getElementById('pc-edit-styles')) return;
+    const css = `
+      .pc-edit {
+        font-size: 1.08rem;
+        line-height: 1.45;
+      }
+      .pc-edit .grid {
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important;
+        gap: 1rem !important;
+      }
+      .pc-edit .field label {
+        display:block;
+        margin-bottom: .35rem;
+        font-weight: 600;
+        color: #334155;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+      }
+      .pc-edit input,
+      .pc-edit select {
+        font-size: 1.05rem;
+        padding: .7rem .8rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        width: 100%;
+      }
+      /* Let long selected text and dropdown entries read comfortably */
+      .pc-edit select {
+        white-space: normal;     /* affects the closed select display */
+        line-height: 1.35;
+      }
+      /* Some browsers ignore styling of <option>, but this helps where supported */
+      .pc-edit select option {
+        white-space: normal;
+        line-height: 1.35;
+        padding: .25rem .35rem;
+      }
+      .pc-edit .actions {
+        display:flex; gap:.5rem; flex-wrap:wrap; margin-top:.75rem;
+      }
+      .pc-edit .danger {
+        background:#e11d48 !important;
+      }
+      .pc-edit .secondary {
+        background:#e2e8f0 !important; color:#0f172a !important;
+      }
+    `.trim();
+    const style = document.createElement('style');
+    style.id = 'pc-edit-styles';
+    style.textContent = css;
+    document.head.appendChild(style);
+  }
+
   // ---------- Event wiring ----------
   document.addEventListener('DOMContentLoaded', () => {
     const R = $('result');
@@ -124,7 +179,7 @@
     $('btnSearch')?.addEventListener('click', search);
     $('btnReset')?.addEventListener('click', reset);
 
-    // 1) Enter-to-search
+    // Enter-to-search
     ['inpClientId','inpPhone','inpEmail','inpFormId'].forEach(id => {
       const el = $(id);
       if (!el) return;
@@ -192,7 +247,7 @@
     // Keep for subsequent actions
     LAST = parsed;
 
-    // 🔎 Diagnostics (shows both the wrapper and parsed)
+    // Diagnostics
     const diag = { receivedAt: new Date().toISOString(), wrapper: res, parsed };
     R.innerHTML = `
       <div class="card" style="border-color:#94a3b8;">
@@ -241,7 +296,6 @@
   }
 
   function cardExisting(c, opts) {
-    // 2,3,4: View rules applied in table
     return `
       <div class="card">
         <h3 style="margin:0 0 .5rem;">${(opts && opts.title) || 'Client'}</h3>
@@ -274,8 +328,10 @@
     `;
   }
 
-  // 5,6,7,8,9: Edit/Create form with labels, hidden fields, checkboxes, selects, and no "Create" button when editing
+  // Edit/Create form with larger text, wider layout, blank dropdown option, and cancel
   function cardEditOrCreate(mode, seed){
+    ensureEditStyles();
+
     const isEdit = mode === 'edit';
     const fields = [
       'ClientID','FirstName','LastName','Address1','Address2','City','State','ZIP',
@@ -291,13 +347,12 @@
     fields.forEach(k => init[k] = seed && seed[k] != null ? seed[k] : '');
 
     const rows = fields.map((k) => {
-      if (isEdit && HIDE_IN_EDIT.includes(k)) return ''; // 5: hide normalized in edit
+      if (isEdit && HIDE_IN_EDIT.includes(k)) return '';
 
       const label = displayLabel(k);
-      const nameAttr = k; // use sheet header as the "name"
+      const nameAttr = k;
       const value = init[k];
 
-      // 7: booleans as checkboxes in edit
       if (BOOL_FIELDS.includes(k)) {
         const checked = truthy(value) ? 'checked' : '';
         return `
@@ -307,11 +362,10 @@
           </div>`;
       }
 
-      // 8: dropdowns from options (with "Other" support on certain fields)
       if (DROPDOWN_FIELDS.includes(k)) {
         const opts = optionsFor(k);
         const hasOther = opts.includes('Other') || /Other\b/i.test(opts.join('||'));
-        const sel = selectHTML(nameAttr, value, opts, hasOther);
+        const sel = selectHTML(nameAttr, value, opts, hasOther, /*includeBlank*/ true);
         return `
           <div class="field">
             <label>${escape(label)}</label>
@@ -319,7 +373,6 @@
           </div>`;
       }
 
-      // default: text input
       const required = (k === 'FirstName' || k === 'LastName') ? 'required' : '';
       return `
         <div class="field">
@@ -328,18 +381,21 @@
         </div>`;
     }).join('');
 
+    // Buttons: Save + Exit without save (cancel)
     return `
-      <div class="card">
+      <div class="card pc-edit">
         <h3 style="margin:0 0 .5rem;">${isEdit ? 'Edit Client' : (seed && (seed.FirstName || seed.LastName) ? 'Review or Create Client' : 'Create New Client')}</h3>
         <form id="formClient" onsubmit="return false;">
-          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+          <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:1rem;">
             ${rows}
           </div>
         </form>
-        <div style="margin-top:.75rem;">
+        <div class="actions">
           ${isEdit
-            ? `<button type="button" onclick="UI_PC.saveEdit()">Save</button>`
-            : `<button type="button" onclick="UI_PC.saveNew()">Create Client</button>`
+            ? `<button type="button" onclick="UI_PC.saveEdit()">Save</button>
+               <button type="button" class="secondary" onclick="UI_PC.cancelEdit()">Exit without save</button>`
+            : `<button type="button" onclick="UI_PC.saveNew()">Create Client</button>
+               <button type="button" class="secondary" onclick="UI_PC.cancelEdit()">Exit without save</button>`
           }
         </div>
       </div>
@@ -357,11 +413,10 @@
       'Household Size','Housing Status'
     ];
     const rows = fields.map((k) => {
-      if (HIDE_IN_VIEW.includes(k)) return ''; // 2: hide backend-only columns
+      if (HIDE_IN_VIEW.includes(k)) return '';
       const label = displayLabel(k);
       const raw = c && c[k] != null ? c[k] : '';
 
-      // 3: booleans as icons in view
       if (BOOL_FIELDS.includes(k)) {
         const on = truthy(raw);
         const icon = on ? '✔️' : '❌';
@@ -384,6 +439,30 @@
       if (!LAST || !LAST.client) { APP.toast('Nothing to edit.'); return; }
       const R = $('result');
       R.innerHTML = cardEditOrCreate('edit', LAST.client);
+    },
+
+    // "Exit without save" → restore previous view
+    cancelEdit() {
+      const R = $('result');
+      if (!R || !LAST) { reset(); return; }
+      // Re-render from LAST status
+      R.innerHTML = `
+        <div class="card" style="border-color:#94a3b8;">
+          <h3 style="margin:0 0 .5rem;">Raw response</h3>
+          <pre style="white-space:pre-wrap;">${escape(JSON.stringify({receivedAt:new Date().toISOString(), parsed: LAST}, null, 2))}</pre>
+        </div>
+      `;
+      if (LAST.status === 'exact' && LAST.client) {
+        R.innerHTML += cardExisting(LAST.client, { title: 'Client Found' });
+      } else if (LAST.status === 'possible_duplicate') {
+        R.innerHTML += cardPossibleDup(LAST);
+      } else if (LAST.status === 'new_from_form') {
+        R.innerHTML += cardEditOrCreate('create', LAST.candidateFromForm || {});
+      } else if (LAST.status === 'not_found' || LAST.status === 'form_not_found') {
+        R.innerHTML += cardEditOrCreate('create', {});
+      } else {
+        R.innerHTML += `<pre>${escape(JSON.stringify(LAST, null, 2))}</pre>`;
+      }
     },
 
     saveEdit() {
@@ -434,10 +513,13 @@
       </tr>`;
   }
 
-  function selectHTML(name, value, opts, allowOther){
+  // includeBlank = true → prepends a blank option "— Select —"
+  function selectHTML(name, value, opts, allowOther, includeBlank){
     const id = slug(name);
     const selected = (v) => (String(v) === String(value) ? 'selected' : '');
-    const optionsHTML = opts.map(o => `<option value="${escapeAttr(o)}" ${selected(o)}>${escape(o)}</option>`).join('');
+    const blankSelected = !value || (value && !opts.includes(String(value)) && !allowOther);
+    const blankHTML = includeBlank ? `<option value="" ${blankSelected ? 'selected' : ''}>— Select —</option>` : '';
+    const optionsHTML = opts.map(o => `<option value="${escapeAttr(o)}" ${selected(o)} title="${escapeAttr(o)}">${escape(o)}</option>`).join('');
     const otherId = `${id}__other`;
     const showOther = allowOther && String(value).trim() && !opts.includes(String(value));
     return `
@@ -448,6 +530,7 @@
         if(hasOther && sel.value==='Other'){ o.style.display='block'; o.disabled=false; o.focus(); }
         else { o.style.display='none'; o.disabled=true; if(sel.value!=='Other'){ o.value=''; } }
       })(this)">
+        ${blankHTML}
         ${optionsHTML}
       </select>
       ${allowOther ? `
