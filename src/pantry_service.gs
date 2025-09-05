@@ -1,61 +1,51 @@
 /** Business logic for client search / dedupe / creation **/
 
 function api_searchClient(query){
-  // query: { clientId?, phone?, email? }
   const q = {
-    clientId: normTrim(query.clientId),
-    phone:    normPhone(query.phone),
-    email:    normEmail(query.email)
+    clientId: normTrim((query && query.clientId) || ''),
+    phone:    normPhone((query && query.phone) || ''),
+    email:    normEmail((query && query.email) || '')
   };
 
+  // Minimal, explicit diagnostics so it can NEVER be undefined
+  const all = clients_readAll();
   const exact = clients_findExact(q);
+
   if (exact) {
-    return { status: 'exact', client: exact };
+    return { status: 'exact', client: exact, diag: { q, rows: all.data.length } };
   }
-  return { status: 'not_found' };
+  return { status: 'not_found', diag: { q, rows: all.data.length } };
 }
 
 function api_searchByFormId(formId){
-  const formRow = forms_getByFormId(formId);
-  if (!formRow) return { status: 'form_not_found' };
+  const id = String(formId || '').trim();
+  const formRow = forms_getByFormId(id);
 
-  // Build a FULL candidate using the explicit mapping helper
+  if (!formRow) return { status: 'form_not_found', diag: { id } };
+
   const candidate = mapFormRowToHubClient(formRow);
-
-  // Compare against HUB clients for 3-point or 2-point match
-  const { data } = clients_readAll();
+  const all = clients_readAll();
 
   function score(row){
     let pts = 0, reasons = [];
-
-    // Name (first + last)
     const nameMatch =
       normName(row['FirstName']) === normName(candidate['FirstName']) &&
       normName(row['LastName'])  === normName(candidate['LastName']);
     if (nameMatch) { pts++; reasons.push('Name'); }
 
-    // Phone
     const candPhone = normPhone(candidate['PhoneNormalized'] || candidate['Phone'] || '');
-    if (candPhone) {
-      if (normPhone(row['PhoneNormalized']) === candPhone) { pts++; reasons.push('Phone'); }
-    }
+    if (candPhone && normPhone(row['PhoneNormalized']) === candPhone) { pts++; reasons.push('Phone'); }
 
-    // Email
     const candEmail = normEmail(candidate['EmailNormalized'] || candidate['Email'] || '');
-    if (candEmail) {
-      if (normEmail(row['EmailNormalized']) === candEmail) { pts++; reasons.push('Email'); }
-    }
+    if (candEmail && normEmail(row['EmailNormalized']) === candEmail) { pts++; reasons.push('Email'); }
 
     return { pts, reasons };
   }
 
   let best = null;
-  for (const r of data) {
+  for (const r of all.data) {
     const s = score(r);
-    if (s.pts >= 2) {
-      best = { row: r, score: s };
-      if (s.pts === 3) break; // exact tri-match
-    }
+    if (s.pts >= 2) { best = { row: r, score: s }; if (s.pts === 3) break; }
   }
 
   if (best) {
@@ -64,12 +54,12 @@ function api_searchByFormId(formId){
       matchReasons: best.score.reasons,
       client: best.row,
       candidateFromForm: candidate,
-      formRow
+      formRow,
+      diag: { id }
     };
   }
 
-  // No match → propose creating a new client prefilled from form
-  return { status: 'new_from_form', candidateFromForm: candidate, formRow };
+  return { status: 'new_from_form', candidateFromForm: candidate, formRow, diag: { id } };
 }
 
 /**
