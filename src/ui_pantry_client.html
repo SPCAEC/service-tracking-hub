@@ -14,10 +14,24 @@
  *  - Server-driven dropdown options (with defaults)
  */
 
+ // make checkboxes bigger (append this CSS block anywhere in this file or in shared_css)
+const style = document.createElement('style');
+style.textContent = `
+  input[type="checkbox"].big-check { 
+    width: 20px; height: 20px; 
+    inline-size: 20px; block-size: 20px;
+    transform: translateY(2px);
+  }
+  .hint { font-size: 12px; color: #64748b; margin-top: .25rem; }
+  .readonly { background: #f8fafc; color:#475569; }
+`;
+document.head.appendChild(style);
+
 (function () {
   // ---------- Config ----------
   const HIDE_IN_VIEW = ['PhoneNormalized', 'EmailNormalized'];
   const HIDE_IN_EDIT = ['PhoneNormalized', 'EmailNormalized'];
+  const HIDE_IN_CREATE = ['PhoneNormalized', 'EmailNormalized', 'FirstSeenSource']; // 2 & 5
 
   const BOOL_FIELDS = ['ConsentSMS', 'ConsentEmail', 'Returning Client'];
 
@@ -343,11 +357,41 @@
       'Household Size','Housing Status'
     ];
 
+    const isCreate = !isEdit;
+    const shouldHide = (field) =>
+      (isEdit  && HIDE_IN_EDIT.includes(field)) ||
+      (isCreate && HIDE_IN_CREATE.includes(field));
+
     const init = {};
     fields.forEach(k => init[k] = seed && seed[k] != null ? seed[k] : '');
 
     const rows = fields.map((k) => {
-      if (isEdit && HIDE_IN_EDIT.includes(k)) return '';
+      // ClientID: add hint only in CREATE mode
+      if (k === 'ClientID') {
+        const required = ''; // never required
+        const val = escapeAttr(value || '');
+        const hint = isCreate ? `<div class="hint">Leave blank unless PetPoint Person ID is known</div>` : '';
+        return `
+          <div class="field">
+            <label>${escape(displayLabel(k))}${required ? ' *' : ''}</label>
+            <input name="ClientID" value="${val}">
+            ${hint}
+          </div>
+        `;
+      }
+
+      // FirstSeenAt: show, prefill now on CREATE, readonly & greyed
+      if (k === 'FirstSeenAt') {
+        const valISO = value || new Date().toISOString();
+        return `
+          <div class="field">
+            <label>${escape(displayLabel(k))}</label>
+            <input name="FirstSeenAt" value="${escapeAttr(valISO)}" readonly class="readonly">
+          </div>
+        `;
+      }
+
+      if (shouldHide(k)) return '';
 
       const label = displayLabel(k);
       const nameAttr = k;
@@ -358,7 +402,7 @@
         return `
           <div class="field">
             <label>${escape(label)}</label>
-            <input type="checkbox" name="${escapeAttr(nameAttr)}" ${checked}>
+            <input type="checkbox" class="big-check" name="${escapeAttr(nameAttr)}" ${checked}>
           </div>`;
       }
 
