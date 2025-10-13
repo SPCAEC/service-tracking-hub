@@ -86,11 +86,19 @@
     </div>
   </section>
 
-  <!-- Scheduling Section (UPDATED) -->
+  <!-- Scheduling Section -->
   <section id="scheduling">
     <h2>Scheduling</h2>
     <div class="grid" id="schedulingGrid">
-      <!-- Dynamic cards will load here -->
+      <!-- Dynamic Scheduling cards -->
+    </div>
+  </section>
+
+  <!-- Medical Section (NEW) -->
+  <section id="medical">
+    <h2>Medical</h2>
+    <div class="grid" id="medicalGrid">
+      <!-- Dynamic Medical cards -->
     </div>
   </section>
 
@@ -113,7 +121,8 @@
   </section>
 
   <script>
-    const apps = [
+    // ─── Scheduling Apps ──────────────────────────────────────────────
+    const schedulingApps = [
       {
         id: 'grantSchedulerCard',
         name: 'Grant Appointment Scheduling',
@@ -121,37 +130,33 @@
         prop: 'APP_LINK_GRANT_SCHEDULER'
       },
       {
-        id: 'lipseyInvoiceCard',
-        name: 'Lipsey Invoice Processing',
-        desc: 'Upload and process receipts for Lipsey Clinic grant reimbursement tracking',
-        prop: 'APP_LINK_LIPSEY_INVOICE'
+        id: 'schedApp2',
+        name: 'App 2',
+        desc: 'Reserved for future scheduling tools',
+        prop: null
       },
       {
-        id: 'app3',
+        id: 'schedApp3',
         name: 'App 3',
         desc: 'Reserved for future scheduling tools',
         prop: null
       },
       {
-        id: 'app4',
+        id: 'schedApp4',
         name: 'App 4',
         desc: 'Reserved for future scheduling tools',
         prop: null
       }
     ];
 
-    const grid = document.getElementById('schedulingGrid');
+    const schedulingGrid = document.getElementById('schedulingGrid');
 
-    // Create placeholder cards first
-    apps.forEach(app => {
+    schedulingApps.forEach(app => {
       const card = document.createElement('div');
       card.id = app.id;
       card.className = 'card disabled';
-      card.innerHTML = `
-        <h3>${app.name}</h3>
-        <p>${app.desc}</p>
-      `;
-      grid.appendChild(card);
+      card.innerHTML = `<h3>${app.name}</h3><p>${app.desc}</p>`;
+      schedulingGrid.appendChild(card);
 
       if (app.prop) {
         google.script.run
@@ -162,8 +167,60 @@
                 <a href="${link}" target="_blank" class="card">
                   <h3>${app.name}</h3>
                   <p>${app.desc}</p>
-                </a>
-              `;
+                </a>`;
+            }
+          })
+          .getAppLink(app.prop);
+      }
+    });
+
+    // ─── Medical Apps ──────────────────────────────────────────────
+    const medicalApps = [
+      {
+        id: 'medApp1',
+        name: 'App 1',
+        desc: 'Reserved for future medical services',
+        prop: null
+      },
+      {
+        id: 'medApp2',
+        name: 'App 2',
+        desc: 'Reserved for future medical services',
+        prop: null
+      },
+      {
+        id: 'medApp3',
+        name: 'App 3',
+        desc: 'Reserved for future medical services',
+        prop: null
+      },
+      {
+        id: 'lipseyInvoiceCard',
+        name: 'Lipsey Invoice Processing',
+        desc: 'Upload and process receipts for Lipsey Clinic grant reimbursement tracking',
+        prop: 'APP_LINK_LIPSEY_INVOICE'
+      }
+    ];
+
+    const medicalGrid = document.getElementById('medicalGrid');
+
+    medicalApps.forEach(app => {
+      const card = document.createElement('div');
+      card.id = app.id;
+      card.className = 'card disabled';
+      card.innerHTML = `<h3>${app.name}</h3><p>${app.desc}</p>`;
+      medicalGrid.appendChild(card);
+
+      if (app.prop) {
+        google.script.run
+          .withSuccessHandler(link => {
+            const el = document.getElementById(app.id);
+            if (link) {
+              el.outerHTML = `
+                <a href="${link}" target="_blank" class="card">
+                  <h3>${app.name}</h3>
+                  <p>${app.desc}</p>
+                </a>`;
             }
           })
           .getAppLink(app.prop);
