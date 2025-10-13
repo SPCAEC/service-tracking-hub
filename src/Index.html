@@ -76,42 +76,49 @@
 <body>
   <h1>SPCA Service Tracking Hub</h1>
 
-  <!-- Pantry Section -->
+  <!-- ────────────────────────────────
+       Pet Food Pantry
+  ────────────────────────────────── -->
   <section id="pantry">
     <h2>Pet Food Pantry</h2>
-    <div class="grid">
-      <a href="..." class="card"><h3>Pantry Order Generator</h3><p>Create and manage Pantry order forms.</p></a>
-      <a href="..." class="card"><h3>Order Fulfillment</h3><p>Generate and print pickup labels.</p></a>
-      <a href="..." class="card"><h3>Pickup App</h3><p>Mark orders as fulfilled and complete.</p></a>
-    </div>
+    <div class="grid" id="pantryGrid"></div>
   </section>
 
-  <!-- Scheduling Section -->
+  <!-- ────────────────────────────────
+       Scheduling
+  ────────────────────────────────── -->
   <section id="scheduling">
     <h2>Scheduling</h2>
-    <div class="grid" id="schedulingGrid">
-      <!-- Dynamic Scheduling cards -->
-    </div>
+    <div class="grid" id="schedulingGrid"></div>
   </section>
 
-  <!-- Medical Section (NEW) -->
+  <!-- ────────────────────────────────
+       Medical
+  ────────────────────────────────── -->
   <section id="medical">
     <h2>Medical</h2>
-    <div class="grid" id="medicalGrid">
-      <!-- Dynamic Medical cards -->
-    </div>
+    <div class="grid" id="medicalGrid"></div>
   </section>
 
-  <!-- Records Section -->
-  <section id="records">
-    <h2>Records & Reporting</h2>
-    <div class="grid">
-      <a href="..." class="card"><h3>Records Upload</h3><p>Submit veterinary or outreach service records.</p></a>
-      <a href="..." class="card"><h3>Reports Dashboard</h3><p>Generate activity and service reports.</p></a>
-    </div>
+  <!-- ────────────────────────────────
+       Connections
+  ────────────────────────────────── -->
+  <section id="connections">
+    <h2>Connections</h2>
+    <div class="grid" id="connectionsGrid"></div>
   </section>
 
-  <!-- Admin Section -->
+  <!-- ────────────────────────────────
+       Reporting Tools
+  ────────────────────────────────── -->
+  <section id="reporting">
+    <h2>Reporting Tools</h2>
+    <div class="grid" id="reportingGrid"></div>
+  </section>
+
+  <!-- ────────────────────────────────
+       Admin
+  ────────────────────────────────── -->
   <section id="admin">
     <h2>Admin Tools</h2>
     <div class="grid">
@@ -121,111 +128,167 @@
   </section>
 
   <script>
-    // ─── Scheduling Apps ──────────────────────────────────────────────
+    // ─── Pantry Apps ─────────────────────────────────────
+    const pantryApps = [
+      {
+        id: 'pantryApp1',
+        name: 'Log Supplies Distributed',
+        desc: 'Used to log supplies provided to individuals or at an event and notifies the Food Pantry Team.',
+        prop: 'APP_LINK_SUPPLIES_GIVEN'
+      },
+      {
+        id: 'pantryApp2',
+        name: 'Request Pantry Services',
+        desc: 'An internal version of the Pantry Request form.',
+        prop: 'APP_LINK_INTERNAL_PANTRY_FORM'
+      },
+      {
+        id: 'pantryApp3',
+        name: 'Daily Pantry Apps',
+        desc: 'Apps supporting day-to-day pantry operations.',
+        prop: 'APP_LINK_DAILY_PANTRY'
+      }
+    ];
+
+    // ─── Scheduling Apps ─────────────────────────────────────
     const schedulingApps = [
       {
-        id: 'grantSchedulerCard',
+        id: 'schedApp1',
         name: 'Grant Appointment Scheduling',
-        desc: 'Use this app to schedule grant-specific appointments with the Lipsey Clinic',
+        desc: 'Use this app to schedule grant-specific appointments with the Lipsey Clinic.',
         prop: 'APP_LINK_GRANT_SCHEDULER'
       },
       {
         id: 'schedApp2',
-        name: 'App 2',
-        desc: 'Reserved for future scheduling tools',
-        prop: null
+        name: 'Shelter-side Clinic Scheduling',
+        desc: 'Used to record medical services provided to owned animals in the infirmary.',
+        prop: 'APP_LINK_SHELTER_APPOINTMENTS'
       },
       {
         id: 'schedApp3',
-        name: 'App 3',
-        desc: 'Reserved for future scheduling tools',
-        prop: null
+        name: 'Outreach Home Visit Scheduling',
+        desc: 'Used to schedule and track Outreach home visits.',
+        prop: 'APP_LINK_HOME_VISITS'
       },
       {
         id: 'schedApp4',
-        name: 'App 4',
-        desc: 'Reserved for future scheduling tools',
-        prop: null
+        name: 'Vaccine Clinic Add-on Appointment Scheduling',
+        desc: 'Used to schedule additional clients for a vaccine clinic when registration is full.',
+        prop: 'APP_LINK_CLINIC_ADDON'
       }
     ];
 
-    const schedulingGrid = document.getElementById('schedulingGrid');
-
-    schedulingApps.forEach(app => {
-      const card = document.createElement('div');
-      card.id = app.id;
-      card.className = 'card disabled';
-      card.innerHTML = `<h3>${app.name}</h3><p>${app.desc}</p>`;
-      schedulingGrid.appendChild(card);
-
-      if (app.prop) {
-        google.script.run
-          .withSuccessHandler(link => {
-            const el = document.getElementById(app.id);
-            if (link) {
-              el.outerHTML = `
-                <a href="${link}" target="_blank" class="card">
-                  <h3>${app.name}</h3>
-                  <p>${app.desc}</p>
-                </a>`;
-            }
-          })
-          .getAppLink(app.prop);
-      }
-    });
-
-    // ─── Medical Apps ──────────────────────────────────────────────
+    // ─── Medical Apps ─────────────────────────────────────
     const medicalApps = [
       {
         id: 'medApp1',
-        name: 'App 1',
-        desc: 'Reserved for future medical services',
-        prop: null
+        name: 'Upload or Request Medical Records',
+        desc: 'Stores and sends medical records to the larger team for upcoming appointments.',
+        prop: 'APP_LINK_MED_UPLOAD'
       },
       {
         id: 'medApp2',
-        name: 'App 2',
-        desc: 'Reserved for future medical services',
-        prop: null
+        name: 'Vaccine Clinic Medical Costs',
+        desc: 'Used to record outreach vaccines subsidized or supplemented by grant funding.',
+        prop: 'APP_LINK_VACCINE_SUBSIDY'
       },
       {
         id: 'medApp3',
         name: 'App 3',
-        desc: 'Reserved for future medical services',
+        desc: 'Reserved for future medical services.',
         prop: null
       },
       {
-        id: 'lipseyInvoiceCard',
+        id: 'medApp4',
         name: 'Lipsey Invoice Processing',
-        desc: 'Upload and process receipts for Lipsey Clinic grant reimbursement tracking',
+        desc: 'Upload and process receipts for Lipsey Clinic grant reimbursement tracking.',
         prop: 'APP_LINK_LIPSEY_INVOICE'
       }
     ];
 
-    const medicalGrid = document.getElementById('medicalGrid');
-
-    medicalApps.forEach(app => {
-      const card = document.createElement('div');
-      card.id = app.id;
-      card.className = 'card disabled';
-      card.innerHTML = `<h3>${app.name}</h3><p>${app.desc}</p>`;
-      medicalGrid.appendChild(card);
-
-      if (app.prop) {
-        google.script.run
-          .withSuccessHandler(link => {
-            const el = document.getElementById(app.id);
-            if (link) {
-              el.outerHTML = `
-                <a href="${link}" target="_blank" class="card">
-                  <h3>${app.name}</h3>
-                  <p>${app.desc}</p>
-                </a>`;
-            }
-          })
-          .getAppLink(app.prop);
+    // ─── Connections Apps ─────────────────────────────────────
+    const connectionsApps = [
+      {
+        id: 'connectApp1',
+        name: 'Create Follow-up',
+        desc: 'Logs a connection and creates a scheduled follow-up for services.',
+        prop: 'APP_LINK_FOLLOWUP'
+      },
+      {
+        id: 'connectApp2',
+        name: 'Call Log',
+        desc: 'Manage voicemail records forwarded to the system for follow-up.',
+        prop: 'APP_LINK_VOICEMAIL'
+      },
+      {
+        id: 'connectApp3',
+        name: 'App 3',
+        desc: 'Reserved for future Connections tools.',
+        prop: null
+      },
+      {
+        id: 'connectApp4',
+        name: 'App 4',
+        desc: 'Reserved for future Connections tools.',
+        prop: null
       }
-    });
+    ];
+
+    // ─── Reporting Apps ─────────────────────────────────────
+    const reportingApps = [
+      {
+        id: 'reportApp1',
+        name: 'Grant Summary Dashboard',
+        desc: 'A visual summary of activities and services filterable by grant.',
+        prop: 'APP_LINK_GRANT_DASHBOARD'
+      },
+      {
+        id: 'reportApp2',
+        name: 'Monthly Reports',
+        desc: 'Quick access to reoccurring reports.',
+        prop: 'APP_LINK_MONTHLY_REPORTS'
+      },
+      {
+        id: 'reportApp3',
+        name: 'Advanced Reporting',
+        desc: 'Admin use only. Config for Reports.',
+        prop: 'APP_LINK_ADMIN_REPORTS'
+      }
+    ];
+
+    // ─── Generic Renderer ─────────────────────────────────────
+    function renderSection(gridId, apps) {
+      const grid = document.getElementById(gridId);
+      apps.forEach(app => {
+        const card = document.createElement('div');
+        card.id = app.id;
+        card.className = 'card disabled';
+        card.innerHTML = `<h3>${app.name}</h3><p>${app.desc}</p>`;
+        grid.appendChild(card);
+
+        if (app.prop) {
+          google.script.run
+            .withSuccessHandler(link => {
+              const el = document.getElementById(app.id);
+              if (link) {
+                el.outerHTML = `
+                  <a href="${link}" target="_blank" class="card">
+                    <h3>${app.name}</h3>
+                    <p>${app.desc}</p>
+                  </a>`;
+              }
+            })
+            .getAppLink(app.prop);
+        }
+      });
+    }
+
+    // Render all sections
+    renderSection('pantryGrid', pantryApps);
+    renderSection('schedulingGrid', schedulingApps);
+    renderSection('medicalGrid', medicalApps);
+    renderSection('connectionsGrid', connectionsApps);
+    renderSection('reportingGrid', reportingApps);
   </script>
 </body>
 </html>

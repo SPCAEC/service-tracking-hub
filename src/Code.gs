@@ -1,7 +1,41 @@
 /**
  * Service Tracking Hub – Outreach Dashboard
- * v0.2
- * Serves the HTML dashboard and exposes dynamic app link helpers.
+ * v0.3
+ * Serves the HTML dashboard and dynamically injects app tiles from Script Properties.
+ *
+ * ──────────────────────────────────────────────────────────────
+ * Script Properties Used for App Links:
+ *
+ *  Pet Food Pantry
+ *   • APP_LINK_SUPPLIES_GIVEN
+ *   • APP_LINK_INTERNAL_PANTRY_FORM
+ *   • APP_LINK_DAILY_PANTRY
+ *
+ *  Scheduling
+ *   • APP_LINK_GRANT_SCHEDULER
+ *   • APP_LINK_SHELTER_APPOINTMENTS
+ *   • APP_LINK_HOME_VISITS
+ *   • APP_LINK_CLINIC_ADDON
+ *
+ *  Medical
+ *   • APP_LINK_MED_UPLOAD
+ *   • APP_LINK_VACCINE_SUBSIDY
+ *   • APP_LINK_LIPSEY_INVOICE
+ *
+ *  Connections
+ *   • APP_LINK_FOLLOWUP
+ *   • APP_LINK_VOICEMAIL
+ *
+ *  Reporting Tools
+ *   • APP_LINK_GRANT_DASHBOARD
+ *   • APP_LINK_MONTHLY_REPORTS
+ *   • APP_LINK_ADMIN_REPORTS
+ *
+ * ──────────────────────────────────────────────────────────────
+ * Utility functions:
+ *   getAppLink(propName) → Returns a configured URL for a given property.
+ *   setAppLink(propName, url) → Sets or updates a property (manual/admin use).
+ *   listAppLinks() → Returns all current APP_LINK_* properties.
  */
 
 function doGet(e) {
@@ -10,8 +44,8 @@ function doGet(e) {
 }
 
 /**
- * Utility to include partials if you later split up HTML/CSS/JS.
- * Example usage in HTML: <?!= include('css.kiosk'); ?>
+ * Utility: include() allows inline templating of other HTML/CSS/JS files.
+ * Example usage: <?!= include('css.kiosk'); ?>
  */
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
@@ -38,7 +72,8 @@ function getAppLink(propName) {
 
 /**
  * Optional admin helper to update an app link from the console.
- * Example: setAppLink('APP_LINK_GRANT_SCHEDULER', 'https://script.google.com/macros/s/.../exec')
+ * Example:
+ *   setAppLink('APP_LINK_GRANT_SCHEDULER', 'https://script.google.com/macros/s/.../exec')
  */
 function setAppLink(propName, url) {
   try {
@@ -54,7 +89,7 @@ function setAppLink(propName, url) {
 
 /**
  * Lists all current Script Properties that start with "APP_LINK_".
- * Useful for debugging or an Admin settings page.
+ * Useful for debugging or building an Admin Settings dashboard.
  */
 function listAppLinks() {
   const props = PropertiesService.getScriptProperties().getProperties();
