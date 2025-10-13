@@ -1,7 +1,8 @@
 /**
  * Service Tracking Hub – Outreach Dashboard
- * v0.3
- * Serves the HTML dashboard and dynamically injects app tiles from Script Properties.
+ * v0.3.1
+ * Serves the main Hub Dashboard and all dynamic app tiles.
+ * Includes new "Daily Pantry Apps" sub-section.
  *
  * ──────────────────────────────────────────────────────────────
  * Script Properties Used for App Links:
@@ -10,6 +11,10 @@
  *   • APP_LINK_SUPPLIES_GIVEN
  *   • APP_LINK_INTERNAL_PANTRY_FORM
  *   • APP_LINK_DAILY_PANTRY
+ *
+ *  Daily Pantry Subsection
+ *   • APP_LINK_PANTRY_G&G
+ *   • APP_LINK_NOTIFY
  *
  *  Scheduling
  *   • APP_LINK_GRANT_SCHEDULER
